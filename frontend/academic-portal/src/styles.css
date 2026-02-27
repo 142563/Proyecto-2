@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+:root {
+  --brand-900: #0f172a;
+  --brand-700: #334155;
+  --surface: #f1f5f9;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at 10% 10%, #ffffff 0%, #e2e8f0 45%, #cbd5e1 100%);
+  font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+}

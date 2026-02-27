@@ -1,4 +1,4 @@
-﻿namespace Academic.Application;
+namespace Academic.Application;
 
 public class Class1
 {

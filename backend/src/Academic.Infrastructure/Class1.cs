@@ -1,4 +1,4 @@
-﻿namespace Academic.Infrastructure;
+namespace Academic.Infrastructure;
 
 public class Class1
 {

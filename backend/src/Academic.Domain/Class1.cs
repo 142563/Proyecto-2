@@ -1,4 +1,4 @@
-﻿namespace Academic.Domain;
+namespace Academic.Domain;
 
 public class Class1
 {
