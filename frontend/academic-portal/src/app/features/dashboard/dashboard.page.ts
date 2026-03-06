@@ -10,8 +10,14 @@ import { AuthService } from '../../core/auth/auth.service';
   template: `
     <section class="panel p-6">
       <p class="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--umg-navy-700)]">Portal UMG Guatemala</p>
-      <h1 class="section-title mt-2 text-2xl">Bienvenido, {{ auth.me()?.email }}</h1>
-      <p class="text-muted mt-1">Rol actual: {{ auth.me()?.role }} · Sesión segura JWT + roles + cierre por inactividad.</p>
+      <h1 class="section-title mt-2 text-2xl">Bienvenido, {{ auth.me()?.fullName || auth.me()?.email }}</h1>
+      <p class="text-muted mt-1">
+        Carnet: {{ auth.me()?.carnet || 'Pendiente' }} · Rol actual: {{ auth.me()?.role }} · Sesión segura JWT + roles + cierre por inactividad.
+      </p>
+      <p class="text-muted mt-1">
+        {{ auth.me()?.programName || 'Programa no configurado' }} · {{ auth.me()?.campusName || 'Sede no configurada' }} ·
+        {{ auth.me()?.shiftName === 'Saturday' ? 'Sábado' : auth.me()?.shiftName === 'Sunday' ? 'Domingo' : auth.me()?.shiftName || 'Jornada no configurada' }}
+      </p>
     </section>
 
     <section class="mt-6 grid gap-4 md:grid-cols-3">

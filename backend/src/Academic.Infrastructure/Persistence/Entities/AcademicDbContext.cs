@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 
-namespace Academic.Infrastructure.Persistence.Scaffold;
+namespace Academic.Infrastructure.Persistence;
 
 public partial class AcademicDbContext : DbContext
 {
@@ -15,11 +15,15 @@ public partial class AcademicDbContext : DbContext
 
     public virtual DbSet<Campus> Campuses { get; set; }
 
+    public virtual DbSet<CarnetPrefixCatalog> CarnetPrefixCatalogs { get; set; }
+
     public virtual DbSet<CampusShiftCapacity> CampusShiftCapacities { get; set; }
 
     public virtual DbSet<Certificate> Certificates { get; set; }
 
     public virtual DbSet<Course> Courses { get; set; }
+
+    public virtual DbSet<CourseCreditRequirement> CourseCreditRequirements { get; set; }
 
     public virtual DbSet<Enrollment> Enrollments { get; set; }
 
@@ -123,6 +127,48 @@ public partial class AcademicDbContext : DbContext
                 .HasColumnName("region");
         });
 
+        modelBuilder.Entity<CarnetPrefixCatalog>(entity =>
+        {
+            entity.HasKey(e => e.Prefix).HasName("carnet_prefix_catalog_pkey");
+
+            entity.ToTable("carnet_prefix_catalog");
+
+            entity.HasIndex(e => e.CampusId, "idx_carnet_prefix_campus_id");
+            entity.HasIndex(e => e.ProgramId, "idx_carnet_prefix_program_id");
+            entity.HasIndex(e => e.ShiftId, "idx_carnet_prefix_shift_id");
+
+            entity.Property(e => e.Prefix)
+                .HasMaxLength(4)
+                .HasColumnName("prefix");
+            entity.Property(e => e.CampusId).HasColumnName("campus_id");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("created_at");
+            entity.Property(e => e.Description)
+                .HasMaxLength(180)
+                .HasColumnName("description");
+            entity.Property(e => e.IsActive)
+                .HasDefaultValue(true)
+                .HasColumnName("is_active");
+            entity.Property(e => e.ProgramId).HasColumnName("program_id");
+            entity.Property(e => e.ShiftId).HasColumnName("shift_id");
+
+            entity.HasOne(d => d.Campus).WithMany(p => p.CarnetPrefixCatalogs)
+                .HasForeignKey(d => d.CampusId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("carnet_prefix_catalog_campus_id_fkey");
+
+            entity.HasOne(d => d.Program).WithMany(p => p.CarnetPrefixCatalogs)
+                .HasForeignKey(d => d.ProgramId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("carnet_prefix_catalog_program_id_fkey");
+
+            entity.HasOne(d => d.Shift).WithMany(p => p.CarnetPrefixCatalogs)
+                .HasForeignKey(d => d.ShiftId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("carnet_prefix_catalog_shift_id_fkey");
+        });
+
         modelBuilder.Entity<CampusShiftCapacity>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("campus_shift_capacity_pkey");
@@ -202,8 +248,8 @@ public partial class AcademicDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("certificates_payment_order_id_fkey");
 
-            entity.HasOne(d => d.Student).WithOne(p => p.Certificate)
-                .HasForeignKey<Certificate>(d => d.StudentId)
+            entity.HasOne(d => d.Student).WithMany(p => p.Certificates)
+                .HasForeignKey(d => d.StudentId)
                 .HasConstraintName("certificates_student_id_fkey");
         });
 
@@ -217,6 +263,8 @@ public partial class AcademicDbContext : DbContext
 
             entity.HasIndex(e => e.ProgramId, "idx_courses_program_id");
 
+            entity.HasIndex(e => new { e.ProgramId, e.Cycle }, "idx_courses_program_cycle");
+
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.Code)
                 .HasMaxLength(20)
@@ -225,9 +273,15 @@ public partial class AcademicDbContext : DbContext
                 .HasDefaultValueSql("now()")
                 .HasColumnName("created_at");
             entity.Property(e => e.Credits).HasColumnName("credits");
+            entity.Property(e => e.Cycle).HasColumnName("cycle");
+            entity.Property(e => e.HoursPerWeek).HasColumnName("hours_per_week");
+            entity.Property(e => e.HoursTotal).HasColumnName("hours_total");
             entity.Property(e => e.IsActive)
                 .HasDefaultValue(true)
                 .HasColumnName("is_active");
+            entity.Property(e => e.IsLab)
+                .HasDefaultValue(false)
+                .HasColumnName("is_lab");
             entity.Property(e => e.Name)
                 .HasMaxLength(180)
                 .HasColumnName("name");
@@ -273,6 +327,26 @@ public partial class AcademicDbContext : DbContext
                     });
         });
 
+        modelBuilder.Entity<CourseCreditRequirement>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("course_credit_requirements_pkey");
+
+            entity.ToTable("course_credit_requirements");
+
+            entity.HasIndex(e => e.CourseId, "idx_course_credit_requirements_course_id");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.CourseId).HasColumnName("course_id");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("now()")
+                .HasColumnName("created_at");
+            entity.Property(e => e.MinApprovedCredits).HasColumnName("min_approved_credits");
+
+            entity.HasOne(d => d.Course).WithMany(p => p.CourseCreditRequirements)
+                .HasForeignKey(d => d.CourseId)
+                .HasConstraintName("course_credit_requirements_course_id_fkey");
+        });
+
         modelBuilder.Entity<Enrollment>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("enrollments_pkey");
@@ -305,8 +379,8 @@ public partial class AcademicDbContext : DbContext
                 .HasDefaultValueSql("now()")
                 .HasColumnName("updated_at");
 
-            entity.HasOne(d => d.Student).WithOne(p => p.Enrollment)
-                .HasForeignKey<Enrollment>(d => d.StudentId)
+            entity.HasOne(d => d.Student).WithMany(p => p.Enrollments)
+                .HasForeignKey(d => d.StudentId)
                 .HasConstraintName("enrollments_student_id_fkey");
         });
 
@@ -481,6 +555,8 @@ public partial class AcademicDbContext : DbContext
 
             entity.HasIndex(e => e.InstitutionalEmail, "students_institutional_email_key").IsUnique();
 
+            entity.HasIndex(e => e.Carnet, "students_carnet_key").IsUnique();
+
             entity.HasIndex(e => e.StudentCode, "students_student_code_key").IsUnique();
 
             entity.HasIndex(e => e.UserId, "students_user_id_key").IsUnique();
@@ -491,8 +567,18 @@ public partial class AcademicDbContext : DbContext
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("created_at");
+            entity.Property(e => e.Carnet)
+                .HasMaxLength(20)
+                .HasColumnName("carnet");
+            entity.Property(e => e.CarnetPrefix)
+                .HasMaxLength(4)
+                .HasColumnName("carnet_prefix");
+            entity.Property(e => e.CarnetSequence)
+                .HasMaxLength(5)
+                .HasColumnName("carnet_sequence");
             entity.Property(e => e.CurrentCampusId).HasColumnName("current_campus_id");
             entity.Property(e => e.CurrentShiftId).HasColumnName("current_shift_id");
+            entity.Property(e => e.EntryYear).HasColumnName("entry_year");
             entity.Property(e => e.FirstName)
                 .HasMaxLength(120)
                 .HasColumnName("first_name");
@@ -523,6 +609,11 @@ public partial class AcademicDbContext : DbContext
                 .HasForeignKey(d => d.CurrentShiftId)
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("students_current_shift_id_fkey");
+
+            entity.HasOne(d => d.CarnetPrefixNavigation).WithMany(p => p.Students)
+                .HasForeignKey(d => d.CarnetPrefix)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("students_carnet_prefix_fkey");
 
             entity.HasOne(d => d.Program).WithMany(p => p.Students)
                 .HasForeignKey(d => d.ProgramId)
@@ -592,6 +683,9 @@ public partial class AcademicDbContext : DbContext
                 .HasDefaultValueSql("now()")
                 .HasColumnName("created_at");
             entity.Property(e => e.FromCampusId).HasColumnName("from_campus_id");
+            entity.Property(e => e.Modality)
+                .HasMaxLength(20)
+                .HasColumnName("modality");
             entity.Property(e => e.Reason)
                 .HasMaxLength(500)
                 .HasColumnName("reason");
@@ -620,8 +714,8 @@ public partial class AcademicDbContext : DbContext
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("transfer_requests_reviewed_by_user_id_fkey");
 
-            entity.HasOne(d => d.Student).WithOne(p => p.TransferRequest)
-                .HasForeignKey<TransferRequest>(d => d.StudentId)
+            entity.HasOne(d => d.Student).WithMany(p => p.TransferRequests)
+                .HasForeignKey(d => d.StudentId)
                 .HasConstraintName("transfer_requests_student_id_fkey");
 
             entity.HasOne(d => d.ToCampus).WithMany(p => p.TransferRequestToCampuses)
@@ -692,3 +786,5 @@ public partial class AcademicDbContext : DbContext
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
 }
+
+

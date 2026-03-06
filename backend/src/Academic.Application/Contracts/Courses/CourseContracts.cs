@@ -1,6 +1,17 @@
-namespace Academic.Application.Contracts.Courses;
+﻿namespace Academic.Application.Contracts.Courses;
 
-public sealed record CourseDto(int Id, string Code, string Name, short Credits, bool IsOverdue, bool HasPrerequisites);
+public sealed record CourseDto(
+    int Id,
+    string Code,
+    string Name,
+    short Credits,
+    short Cycle,
+    short HoursPerWeek,
+    short HoursTotal,
+    bool IsLab,
+    bool IsOverdue,
+    bool HasPrerequisites,
+    string PrerequisiteSummary);
 
 public sealed record OverdueCourseDto(int Id, string Code, string Name, short Credits);
 
@@ -25,3 +36,4 @@ public sealed record EnrollmentSummaryDto(
     Guid PaymentOrderId,
     DateTime PaymentExpiresAt,
     DateTime CreatedAt);
+

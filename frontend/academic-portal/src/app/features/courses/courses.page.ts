@@ -18,16 +18,31 @@ import { StatusBadgeComponent } from '../../shared/components/status-badge.compo
     <section class="grid gap-6 lg:grid-cols-2">
       <article class="panel p-6">
         <h2 class="section-title text-lg">Cursos del Pensum</h2>
-        <p class="mt-1 text-sm text-muted">Selecciona cursos extra o atrasados para generar orden de pago.</p>
+        <p class="mt-1 text-sm text-muted">Pensum oficial por ciclo. Selecciona cursos extra o atrasados para generar orden de pago.</p>
 
-        <div class="mt-4 space-y-2">
-          <label *ngFor="let course of courses" class="flex items-center justify-between rounded-lg border border-slate-200 p-3">
-            <span>
-              {{ course.code }} - {{ course.name }}
-              <span *ngIf="course.isOverdue" class="ml-2 rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700">Atrasado</span>
-            </span>
-            <input type="checkbox" [checked]="selectedCourseIds.has(course.id)" (change)="toggleCourse(course.id)" />
-          </label>
+        <div class="mt-4 space-y-4">
+          <section *ngFor="let cycle of cycleOrder">
+            <div *ngIf="coursesByCycle.get(cycle)?.length">
+              <h3 class="font-display text-sm font-bold uppercase tracking-wide text-[color:var(--umg-navy-700)]">Ciclo {{ cycle }}</h3>
+              <div class="mt-2 space-y-2">
+                <label
+                  *ngFor="let course of coursesByCycle.get(cycle)"
+                  class="block rounded-lg border border-slate-200 p-3"
+                >
+                  <div class="flex items-center justify-between gap-3">
+                    <span class="font-semibold text-slate-800">{{ course.code }} - {{ course.name }}</span>
+                    <input type="checkbox" [checked]="selectedCourseIds.has(course.id)" (change)="toggleCourse(course.id)" />
+                  </div>
+                  <p class="mt-1 text-xs text-muted">
+                    {{ course.credits }} créditos · {{ course.hoursPerWeek }} h/semana · {{ course.hoursTotal }} h totales
+                    <span *ngIf="course.isLab">· Con laboratorio</span>
+                  </p>
+                  <p class="mt-1 text-xs text-muted">Prerrequisitos: {{ course.prerequisiteSummary }}</p>
+                  <span *ngIf="course.isOverdue" class="mt-2 inline-block rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700">Atrasado</span>
+                </label>
+              </div>
+            </div>
+          </section>
         </div>
 
         <button class="btn-primary mt-4 w-full px-4 py-2" (click)="createEnrollment()">
@@ -88,6 +103,8 @@ export class CoursesPage {
   private readonly baseUrl = API_BASE_URL;
 
   courses: CourseDto[] = [];
+  coursesByCycle = new Map<number, CourseDto[]>();
+  cycleOrder: number[] = [];
   overdue: OverdueCourseDto[] = [];
   enrollments: EnrollmentSummaryResponse[] = [];
   selectedCourseIds = new Set<number>();
@@ -103,6 +120,7 @@ export class CoursesPage {
   loadPensum(): void {
     this.http.get<ApiEnvelope<CourseDto[]>>(`${this.baseUrl}/courses/pensum`).subscribe((response) => {
       this.courses = response.success ? response.data : [];
+      this.groupByCycle();
     });
   }
 
@@ -125,6 +143,19 @@ export class CoursesPage {
     }
 
     this.selectedCourseIds.add(courseId);
+  }
+
+  private groupByCycle(): void {
+    const map = new Map<number, CourseDto[]>();
+    for (const course of this.courses) {
+      const cycle = course.cycle ?? 0;
+      const group = map.get(cycle) ?? [];
+      group.push(course);
+      map.set(cycle, group);
+    }
+
+    this.coursesByCycle = map;
+    this.cycleOrder = Array.from(map.keys()).sort((a, b) => a - b);
   }
 
   createEnrollment(): void {

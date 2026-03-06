@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Academic.Infrastructure.Persistence.Scaffold;
+namespace Academic.Infrastructure.Persistence;
 
 public partial class TransferRequest
 {
@@ -14,6 +14,8 @@ public partial class TransferRequest
     public int ToCampusId { get; set; }
 
     public short ToShiftId { get; set; }
+
+    public string Modality { get; set; } = null!;
 
     public string? Reason { get; set; }
 
@@ -39,3 +41,5 @@ public partial class TransferRequest
 
     public virtual Shift ToShift { get; set; } = null!;
 }
+
+

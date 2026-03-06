@@ -1,11 +1,11 @@
-﻿# Proyecto 2 - Monorepo Academico UMG
+﻿# Proyecto 2 - Portal MIUMG Estudiantil
 
-Monorepo full-stack para gestion academica (Universidad Mariano Galvez de Guatemala) con backend .NET 8 + frontend Angular 20 + PostgreSQL DB-first.
+Monorepo full-stack para gestión académica de la **Universidad Mariano Gálvez de Guatemala (UMG)** con backend .NET 8, frontend Angular 20 y PostgreSQL.
 
 ## Stack
 - Backend: ASP.NET Core Web API (.NET 8), DDD + Clean Architecture + CQRS (MediatR)
-- ORM: EF Core (Database-First) con PostgreSQL
-- DB: Neon (cloud) + opcion local con Docker
+- ORM: EF Core **Code First** con migraciones
+- DB: Neon (cloud) + opción local con Docker
 - Frontend: Angular 20.3.x (LTS) + TailwindCSS
 - Auth: JWT + roles (`Student`, `Admin`)
 
@@ -19,7 +19,8 @@ Monorepo full-stack para gestion academica (Universidad Mariano Galvez de Guatem
 |   |   |-- Academic.Domain/
 |   |   |-- Academic.Application/
 |   |   |-- Academic.Infrastructure/
-|   |   |   |-- Persistence/Scaffold/
+|   |   |   |-- Persistence/Entities/
+|   |   |   |-- Persistence/Migrations/
 |   |   |-- Academic.Api/
 |   |-- tools/
 |   |   |-- DbBootstrapper/
@@ -28,6 +29,7 @@ Monorepo full-stack para gestion academica (Universidad Mariano Galvez de Guatem
 |   |-- academic-portal/
 |-- db/
 |   |-- schema.sql
+|   |-- schema.idempotent.sql
 |   |-- seed.sql
 |   |-- data_fix_consistency.sql
 |-- docs/
@@ -55,24 +57,32 @@ Academic__PendingPaymentExpirationHours=72
 Academic__DefaultCurrency=GTQ
 ```
 
-> La connection string Neon tambien se mantiene en `backend/src/Academic.Api/appsettings.Development.json`.
+> La connection string de Neon también se mantiene en `backend/src/Academic.Api/appsettings.Development.json`.
 
-## Base de datos (DB-first)
-### 1) Aplicar schema + seed + limpieza de inconsistencias
-Opcion recomendada:
+## Base de datos (Code First)
+### 1) Aplicar migraciones
 ```bash
 cd backend
-dotnet run --project tools/DbBootstrapper/DbBootstrapper.csproj -- "<NEON_CONNECTION_STRING>"
+dotnet ef database update --project src/Academic.Infrastructure/Academic.Infrastructure.csproj --startup-project src/Academic.Api/Academic.Api.csproj
 ```
 
-Este comando ejecuta en orden:
+### 2) Ejecutar seed + fixes de consistencia
+```bash
+dotnet run --project tools/DbBootstrapper/DbBootstrapper.csproj -- "<NEON_CONNECTION_STRING>"
+```
+Este comando aplica en orden:
 - `db/schema.sql`
 - `db/seed.sql`
 - `db/data_fix_consistency.sql`
 
-### 2) Scaffold EF Core
+### 3) Crear nueva migración (cuando cambie el modelo)
 ```bash
-dotnet ef dbcontext scaffold "<CONNECTION_STRING_NPGSQL>" Npgsql.EntityFrameworkCore.PostgreSQL -o Persistence/Scaffold -c AcademicDbContext -f --project src/Academic.Infrastructure/Academic.Infrastructure.csproj --startup-project src/Academic.Api/Academic.Api.csproj --no-onconfiguring
+dotnet ef migrations add <NombreMigracion> --project src/Academic.Infrastructure/Academic.Infrastructure.csproj --startup-project src/Academic.Api/Academic.Api.csproj --context AcademicDbContext -o Persistence/Migrations
+```
+
+### 4) Generar script idempotente
+```bash
+dotnet ef migrations script --idempotent --project src/Academic.Infrastructure/Academic.Infrastructure.csproj --startup-project src/Academic.Api/Academic.Api.csproj --context AcademicDbContext -o ../db/schema.idempotent.sql
 ```
 
 ## Docker local
@@ -83,7 +93,7 @@ Servicios:
 - PostgreSQL: `localhost:5432`
 - pgAdmin: `http://localhost:5050` (`admin@local.dev` / `admin`)
 
-## Correr backend
+## Correr backend (puerto 5262)
 ```bash
 cd backend
 dotnet restore
@@ -93,7 +103,7 @@ dotnet run --project src/Academic.Api/Academic.Api.csproj
 Swagger:
 - `http://localhost:5262/swagger`
 
-## Correr frontend
+## Correr frontend (puerto 4200)
 ```bash
 cd frontend/academic-portal
 npm install
@@ -103,7 +113,7 @@ App Angular:
 - `http://localhost:4200`
 
 ## Troubleshooting (Windows - MSB3026/MSB3027)
-Si aparece bloqueo de `Academic.Api.exe` o DLLs:
+Si aparece bloqueo de `Academic.Api` o DLLs:
 ```powershell
 Get-Process Academic.Api -ErrorAction SilentlyContinue | Stop-Process -Force
 ```
@@ -116,9 +126,11 @@ Luego vuelve a ejecutar `dotnet build` / `dotnet run`.
 - Student 1:
   - `ana.gomez@alumnos.umg.edu.gt`
   - `Student123!`
+  - Carnet: `0908-22-14264` (Escuintla, plan sábado)
 - Student 2:
-  - `juan.perez@alumnos.umg.edu.gt`
+  - `carlos.salazar@alumnos.umg.edu.gt`
   - `Student123!`
+  - Carnet: `0905-23-9876`
 
 ## Tarifas referenciales (GTQ)
 - Transfer: `Q150.00`
@@ -127,11 +139,11 @@ Luego vuelve a ejecutar `dotnet build` / `dotnet run`.
 - CourseOverdue: `Q130.00`
 - Certificate: `Q70.00`
 
-## Flujos anti-bloqueo implementados
-- Una solicitud activa por modulo (traslado/asignacion/certificacion).
-- Expiracion automatica de pagos pendientes (`72h`) con cancelacion relacionada.
-- Cancelacion explicita para solicitudes pendientes de pago.
-- Limpieza de estados huerfanos con `db/data_fix_consistency.sql`.
+## Formato de carnet
+Patrón: `NNNN-YY-NNNN|NNNNN`
+- `NNNN`: prefijo (sede/plan/carrera según `carnet_prefix_catalog`)
+- `YY`: año de ingreso (2 dígitos)
+- `NNNN|NNNNN`: correlativo de carnet
 
 ## Endpoints principales
 - Auth:
@@ -141,7 +153,7 @@ Luego vuelve a ejecutar `dotnet build` / `dotnet run`.
   - `GET /campuses`
 - Transfers:
   - `GET /transfers/availability?campusId=&shift=`
-  - `POST /transfers`
+  - `POST /transfers` (incluye `modality`)
   - `GET /transfers/my`
   - `POST /transfers/{id}/cancel`
   - `POST /transfers/{id}/review` (Admin)
@@ -179,6 +191,11 @@ cd frontend/academic-portal
 npm run lint
 npm run build
 ```
+
+## Branding y logo
+- Escudo UMG utilizado desde fuente pública:  
+  `https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Escudo_de_la_universidad_Mariano_G%C3%A1lvez_Guatemala.svg/250px-Escudo_de_la_universidad_Mariano_G%C3%A1lvez_Guatemala.svg.png`
+- Archivo local: `frontend/academic-portal/public/assets/umg-shield.png`
 
 ## Arquitectura
 Ver detalle en `docs/architecture.md`.

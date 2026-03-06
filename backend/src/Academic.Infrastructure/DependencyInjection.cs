@@ -1,6 +1,6 @@
-using Academic.Application.Abstractions;
+﻿using Academic.Application.Abstractions;
 using Academic.Infrastructure.Configuration;
-using Academic.Infrastructure.Persistence.Scaffold;
+using Academic.Infrastructure.Persistence;
 using Academic.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -48,3 +48,4 @@ public static class DependencyInjection
         return services;
     }
 }
+

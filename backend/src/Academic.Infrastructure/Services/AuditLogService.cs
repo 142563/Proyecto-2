@@ -1,6 +1,6 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Academic.Application.Abstractions;
-using Academic.Infrastructure.Persistence.Scaffold;
+using Academic.Infrastructure.Persistence;
 
 namespace Academic.Infrastructure.Services;
 
@@ -31,3 +31,4 @@ public sealed class AuditLogService(AcademicDbContext dbContext) : IAuditLogServ
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 }
+

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Academic.Infrastructure.Persistence.Scaffold;
+namespace Academic.Infrastructure.Persistence;
 
 public partial class CampusShiftCapacity
 {
@@ -21,3 +21,5 @@ public partial class CampusShiftCapacity
 
     public virtual Shift Shift { get; set; } = null!;
 }
+
+

@@ -1,6 +1,6 @@
-namespace Academic.Application.Contracts.Transfers;
+﻿namespace Academic.Application.Contracts.Transfers;
 
-public sealed record CreateTransferDto(int CampusId, string Shift, string? Reason);
+public sealed record CreateTransferDto(int CampusId, string Shift, string Modality, string? Reason);
 public sealed record ReviewTransferDto(string Decision, string? Notes);
 
 public sealed record TransferAvailabilityDto(
@@ -28,6 +28,7 @@ public sealed record TransferDto(
     string FromCampus,
     string ToCampus,
     string Shift,
+    string Modality,
     string Status,
     DateTime CreatedAt
 );
@@ -40,3 +41,4 @@ public sealed record TransferReviewResultDto(
     Guid? ReviewedByUserId,
     DateTime? ReviewedAt,
     string? ReviewNotes);
+

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Academic.Infrastructure.Persistence.Scaffold;
+namespace Academic.Infrastructure.Persistence;
 
 public partial class EnrollmentCourse
 {
@@ -15,3 +15,5 @@ public partial class EnrollmentCourse
 
     public virtual Enrollment Enrollment { get; set; } = null!;
 }
+
+

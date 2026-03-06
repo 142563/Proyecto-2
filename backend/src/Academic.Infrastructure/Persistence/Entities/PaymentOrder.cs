@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Academic.Infrastructure.Persistence.Scaffold;
+namespace Academic.Infrastructure.Persistence;
 
 public partial class PaymentOrder
 {
@@ -33,3 +33,5 @@ public partial class PaymentOrder
 
     public virtual Student Student { get; set; } = null!;
 }
+
+

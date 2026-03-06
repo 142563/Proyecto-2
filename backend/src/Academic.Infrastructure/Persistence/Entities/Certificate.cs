@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Academic.Infrastructure.Persistence.Scaffold;
+namespace Academic.Infrastructure.Persistence;
 
 public partial class Certificate
 {
@@ -31,3 +31,5 @@ public partial class Certificate
 
     public virtual Student Student { get; set; } = null!;
 }
+
+

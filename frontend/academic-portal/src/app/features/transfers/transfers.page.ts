@@ -36,6 +36,13 @@ import {
         <button class="btn-secondary px-4 py-2" (click)="checkAvailability()">Validar cupo</button>
       </div>
 
+      <div class="mt-3 grid gap-3 md:grid-cols-2">
+        <select class="input-control" [(ngModel)]="modality">
+          <option value="Presencial">Presencial</option>
+          <option value="Virtual">Virtual</option>
+        </select>
+      </div>
+
       <textarea
         class="input-control mt-3"
         rows="3"
@@ -62,6 +69,7 @@ import {
               <th>Origen</th>
               <th>Destino</th>
               <th>Jornada</th>
+              <th>Modalidad</th>
               <th>Estado</th>
               <th class="text-right">Acción</th>
             </tr>
@@ -72,6 +80,7 @@ import {
               <td>{{ item.fromCampus }}</td>
               <td>{{ item.toCampus }}</td>
               <td>{{ item.shift === 'Saturday' ? 'Sábado' : 'Domingo' }}</td>
+              <td>{{ item.modality }}</td>
               <td><app-status-badge [label]="item.status"></app-status-badge></td>
               <td class="text-right">
                 <button
@@ -97,6 +106,7 @@ export class TransfersPage {
   transfers: TransferResponse[] = [];
   campusId = 0;
   shift: 'Saturday' | 'Sunday' = 'Saturday';
+  modality: 'Presencial' | 'Virtual' = 'Presencial';
   reason = '';
   availabilityText = '';
   message = '';
@@ -151,6 +161,7 @@ export class TransfersPage {
       .post<ApiEnvelope<{ paymentOrderId: string; amount: number; currency: string; expiresAt: string }>>(`${this.baseUrl}/transfers`, {
         campusId: this.campusId,
         shift: this.shift,
+        modality: this.modality,
         reason: this.reason
       })
       .subscribe({
@@ -160,7 +171,7 @@ export class TransfersPage {
             return;
           }
 
-          this.message = `Solicitud creada. Orden de pago ${response.data.paymentOrderId} por Q${response.data.amount.toFixed(2)} (${response.data.currency}).`;
+          this.message = `Solicitud creada (${this.modality}). Orden de pago ${response.data.paymentOrderId} por Q${response.data.amount.toFixed(2)} (${response.data.currency}).`;
           this.loadMyTransfers();
         },
         error: (error: HttpErrorResponse) => {

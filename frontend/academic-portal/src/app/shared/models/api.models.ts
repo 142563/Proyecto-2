@@ -20,6 +20,11 @@ export interface MeResponse {
   email: string;
   role: 'Student' | 'Admin';
   isActive: boolean;
+  fullName?: string;
+  carnet?: string;
+  programName?: string;
+  campusName?: string;
+  shiftName?: string;
 }
 
 export interface CampusResponse {
@@ -53,6 +58,7 @@ export interface TransferResponse {
   fromCampus: string;
   toCampus: string;
   shift: string;
+  modality: 'Presencial' | 'Virtual';
   status: string;
   createdAt: string;
 }
@@ -83,8 +89,13 @@ export interface CourseDto {
   code: string;
   name: string;
   credits: number;
+  cycle: number;
+  hoursPerWeek: number;
+  hoursTotal: number;
+  isLab: boolean;
   isOverdue: boolean;
   hasPrerequisites: boolean;
+  prerequisiteSummary: string;
 }
 
 export interface OverdueCourseDto {

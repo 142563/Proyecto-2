@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Academic.Infrastructure.Persistence.Scaffold;
+namespace Academic.Infrastructure.Persistence;
 
 public partial class Course
 {
@@ -15,6 +15,14 @@ public partial class Course
 
     public short Credits { get; set; }
 
+    public short Cycle { get; set; }
+
+    public short HoursPerWeek { get; set; }
+
+    public short HoursTotal { get; set; }
+
+    public bool IsLab { get; set; }
+
     public bool IsActive { get; set; }
 
     public DateTime CreatedAt { get; set; }
@@ -25,7 +33,11 @@ public partial class Course
 
     public virtual ICollection<StudentCourseHistory> StudentCourseHistories { get; set; } = new List<StudentCourseHistory>();
 
+    public virtual ICollection<CourseCreditRequirement> CourseCreditRequirements { get; set; } = new List<CourseCreditRequirement>();
+
     public virtual ICollection<Course> Courses { get; set; } = new List<Course>();
 
     public virtual ICollection<Course> PrerequisiteCourses { get; set; } = new List<Course>();
 }
+
+

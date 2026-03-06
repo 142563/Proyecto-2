@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Academic.Application.Abstractions;
@@ -13,7 +13,7 @@ using Academic.Application.Contracts.Transfers;
 using Academic.Domain.Enums;
 using Academic.Domain.ValueObjects;
 using Academic.Infrastructure.Configuration;
-using Academic.Infrastructure.Persistence.Scaffold;
+using Academic.Infrastructure.Persistence;
 using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
@@ -95,6 +95,11 @@ public sealed class AcademicOperationsService(
             .Include(x => x.UserRoles)
                 .ThenInclude(x => x.Role)
             .Include(x => x.Student)
+                .ThenInclude(x => x!.Program)
+            .Include(x => x.Student)
+                .ThenInclude(x => x!.CurrentCampus)
+            .Include(x => x.Student)
+                .ThenInclude(x => x!.CurrentShift)
             .FirstOrDefaultAsync(x => x.Id == userId, cancellationToken);
 
         if (user is null)
@@ -103,7 +108,53 @@ public sealed class AcademicOperationsService(
         }
 
         var role = user.UserRoles.Select(r => r.Role.Name).FirstOrDefault() ?? SystemRoles.Student;
-        return Result<MeDto>.Success(new MeDto(user.Id, user.Student?.Id, user.Email, role, user.IsActive));
+        string? fullName = null;
+        string? carnet = null;
+        string? programName = null;
+        string? campusName = null;
+        string? shiftName = null;
+
+        if (user.Student is not null)
+        {
+            fullName = $"{user.Student.FirstName} {user.Student.LastName}".Trim();
+            carnet = user.Student.Carnet;
+            programName = user.Student.Program.Name;
+            campusName = user.Student.CurrentCampus?.Name;
+            shiftName = user.Student.CurrentShift?.Name;
+
+            if (!Carnet.TryCreate(user.Student.Carnet, out var parsedCarnet))
+            {
+                return Result<MeDto>.Failure("validation_error", "El carnet del estudiante no tiene un formato válido.");
+            }
+
+            var prefix = await _dbContext.CarnetPrefixCatalogs
+                .AsNoTracking()
+                .Include(x => x.Campus)
+                .Include(x => x.Shift)
+                .Include(x => x.Program)
+                .FirstOrDefaultAsync(x => x.Prefix == parsedCarnet!.Prefix && x.IsActive, cancellationToken);
+
+            if (prefix is null)
+            {
+                return Result<MeDto>.Failure("validation_error", $"El prefijo de carnet {parsedCarnet!.Prefix} no está configurado.");
+            }
+
+            programName ??= prefix.Program.Name;
+            campusName ??= prefix.Campus.Name;
+            shiftName ??= prefix.Shift.Name;
+        }
+
+        return Result<MeDto>.Success(new MeDto(
+            user.Id,
+            user.Student?.Id,
+            user.Email,
+            role,
+            user.IsActive,
+            fullName,
+            carnet,
+            programName,
+            campusName,
+            shiftName));
     }
 
     public async Task<Result<IReadOnlyList<CampusDto>>> GetCampusesAsync(CancellationToken cancellationToken)
@@ -145,6 +196,14 @@ public sealed class AcademicOperationsService(
     public async Task<Result<TransferCreateResultDto>> CreateTransferAsync(Guid studentId, CreateTransferDto request, CancellationToken cancellationToken)
     {
         await ReconcileExpiredPendingAsync(studentId, cancellationToken);
+        var modality = NormalizeModality(request.Modality);
+        if (modality is null)
+        {
+            return Result<TransferCreateResultDto>.ValidationFailure(new Dictionary<string, string[]>
+            {
+                ["modality"] = ["La modalidad debe ser Presencial o Virtual."]
+            });
+        }
 
         var student = await _dbContext.Students
             .AsNoTracking()
@@ -201,6 +260,7 @@ public sealed class AcademicOperationsService(
             FromCampusId = student.CurrentCampusId,
             ToCampusId = request.CampusId,
             ToShiftId = availability.ShiftId,
+            Modality = modality,
             Reason = request.Reason,
             Status = DomainStatuses.Transfer.PendingPayment,
             CreatedAt = now,
@@ -216,7 +276,7 @@ public sealed class AcademicOperationsService(
             Amount = transferPricing.Amount,
             Currency = transferPricing.Currency,
             Status = DomainStatuses.Payment.Pending,
-            Description = $"Pago de solicitud de traslado - Campus {request.CampusId} / {shiftName}",
+            Description = $"Pago de solicitud de traslado - Campus {request.CampusId} / {shiftName} / {modality}",
             CreatedAt = now,
             ExpiresAt = expiresAt
         };
@@ -230,7 +290,7 @@ public sealed class AcademicOperationsService(
             "TransferCreated",
             "TransferRequest",
             transfer.Id.ToString(),
-            new { transfer.ToCampusId, transfer.ToShiftId, payment.Amount, payment.Currency, payment.ExpiresAt },
+            new { transfer.ToCampusId, transfer.ToShiftId, transfer.Modality, payment.Amount, payment.Currency, payment.ExpiresAt },
             null,
             cancellationToken);
 
@@ -257,6 +317,7 @@ public sealed class AcademicOperationsService(
                 x.FromCampus != null ? x.FromCampus.Name : "N/A",
                 x.ToCampus.Name,
                 x.ToShift.Name,
+                x.Modality,
                 x.Status,
                 x.CreatedAt))
             .ToListAsync(cancellationToken);
@@ -419,19 +480,42 @@ public sealed class AcademicOperationsService(
 
         var overdueIds = await GetOverdueIdsAsync(studentId, cancellationToken);
 
-        var courses = await _dbContext.Courses
+        var coursesRaw = await _dbContext.Courses
             .AsNoTracking()
             .Include(c => c.Courses)
+            .Include(c => c.CourseCreditRequirements)
             .Where(x => x.ProgramId == student.ProgramId && x.IsActive)
-            .OrderBy(x => x.Code)
-            .Select(x => new CourseDto(
+            .OrderBy(x => x.Cycle)
+            .ThenBy(x => x.Code)
+            .ToListAsync(cancellationToken);
+
+        var courses = coursesRaw.Select(x =>
+        {
+            var prerequisiteCodes = x.Courses
+                .Select(c => c.Code)
+                .Distinct()
+                .OrderBy(code => code)
+                .ToList();
+            var prerequisiteCredits = x.CourseCreditRequirements
+                .Select(c => c.MinApprovedCredits)
+                .Distinct()
+                .OrderBy(v => v)
+                .ToList();
+
+            var prerequisiteSummary = BuildPrerequisiteSummary(prerequisiteCodes, prerequisiteCredits);
+            return new CourseDto(
                 x.Id,
                 x.Code,
                 x.Name,
                 x.Credits,
+                x.Cycle,
+                x.HoursPerWeek,
+                x.HoursTotal,
+                x.IsLab,
                 overdueIds.Contains(x.Id),
-                x.Courses.Any()))
-            .ToListAsync(cancellationToken);
+                prerequisiteCodes.Count > 0 || prerequisiteCredits.Count > 0,
+                prerequisiteSummary);
+        }).ToList();
 
         return Result<IReadOnlyList<CourseDto>>.Success(courses);
     }
@@ -516,6 +600,7 @@ public sealed class AcademicOperationsService(
 
         var selectedCourses = await _dbContext.Courses
             .Include(c => c.Courses)
+            .Include(c => c.CourseCreditRequirements)
             .Where(x => uniqueIds.Contains(x.Id) && x.ProgramId == student.ProgramId && x.IsActive)
             .ToListAsync(cancellationToken);
 
@@ -550,6 +635,10 @@ public sealed class AcademicOperationsService(
             .Distinct()
             .ToListAsync(cancellationToken);
 
+        var approvedCredits = await _dbContext.Courses
+            .Where(x => passedCourseIds.Contains(x.Id))
+            .SumAsync(x => (int?)x.Credits, cancellationToken) ?? 0;
+
         foreach (var course in selectedCourses)
         {
             var prerequisiteIds = course.Courses.Select(x => x.Id).Distinct().ToList();
@@ -557,6 +646,17 @@ public sealed class AcademicOperationsService(
             if (unmet.Count > 0)
             {
                 return Result<EnrollmentResultDto>.Failure("business_rule", $"Prerequisites are not met for course {course.Code}.");
+            }
+
+            var minCredits = course.CourseCreditRequirements
+                .Select(x => x.MinApprovedCredits)
+                .DefaultIfEmpty((short)0)
+                .Max();
+            if (approvedCredits < minCredits)
+            {
+                return Result<EnrollmentResultDto>.Failure(
+                    "business_rule",
+                    $"No cumples el mínimo de créditos aprobados para {course.Code}. Requiere {minCredits}.");
             }
         }
 
@@ -1431,6 +1531,38 @@ public sealed class AcademicOperationsService(
     private static bool IsPaymentExpired(PaymentOrder payment)
         => payment.ExpiresAt <= DateTime.UtcNow;
 
+    private static string BuildPrerequisiteSummary(IReadOnlyCollection<string> courseCodes, IReadOnlyCollection<short> creditRequirements)
+    {
+        if (courseCodes.Count == 0 && creditRequirements.Count == 0)
+        {
+            return "Sin prerrequisitos";
+        }
+
+        var parts = new List<string>();
+        if (courseCodes.Count > 0)
+        {
+            parts.Add($"Cursos: {string.Join(", ", courseCodes)}");
+        }
+
+        if (creditRequirements.Count > 0)
+        {
+            parts.Add($"Créditos aprobados: {string.Join(" / ", creditRequirements)}");
+        }
+
+        return string.Join(" | ", parts);
+    }
+
+    private static string? NormalizeModality(string value)
+    {
+        var normalized = RemoveDiacritics(value).Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "presencial" => "Presencial",
+            "virtual" => "Virtual",
+            _ => null
+        };
+    }
+
     private static string NormalizeShift(string value)
     {
         var normalized = RemoveDiacritics(value).Trim().ToLowerInvariant();
@@ -1464,3 +1596,4 @@ public sealed class AcademicOperationsService(
 
     private sealed record ServicePricing(decimal Amount, string Currency);
 }
+

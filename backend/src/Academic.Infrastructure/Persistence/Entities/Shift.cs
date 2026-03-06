@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Academic.Infrastructure.Persistence.Scaffold;
+namespace Academic.Infrastructure.Persistence;
 
 public partial class Shift
 {
@@ -15,5 +15,9 @@ public partial class Shift
 
     public virtual ICollection<Student> Students { get; set; } = new List<Student>();
 
+    public virtual ICollection<CarnetPrefixCatalog> CarnetPrefixCatalogs { get; set; } = new List<CarnetPrefixCatalog>();
+
     public virtual ICollection<TransferRequest> TransferRequests { get; set; } = new List<TransferRequest>();
 }
+
+

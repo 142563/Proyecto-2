@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Academic.Infrastructure.Persistence.Scaffold;
+namespace Academic.Infrastructure.Persistence;
 
 public partial class StudentCourseHistory
 {
@@ -25,3 +25,5 @@ public partial class StudentCourseHistory
 
     public virtual Student Student { get; set; } = null!;
 }
+
+

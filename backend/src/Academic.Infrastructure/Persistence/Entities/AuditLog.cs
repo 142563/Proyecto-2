@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Academic.Infrastructure.Persistence.Scaffold;
+namespace Academic.Infrastructure.Persistence;
 
 public partial class AuditLog
 {
@@ -23,3 +23,5 @@ public partial class AuditLog
 
     public virtual User? User { get; set; }
 }
+
+

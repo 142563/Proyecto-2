@@ -1,4 +1,4 @@
-using Academic.Application.Abstractions;
+﻿using Academic.Application.Abstractions;
 using Academic.Application.Common;
 using Academic.Application.Contracts.Transfers;
 using MediatR;
@@ -36,11 +36,11 @@ public sealed class CreateTransferCommandHandler(ITransferService transferServic
             return Task.FromResult(Result<TransferCreateResultDto>.Failure("forbidden", "Only students can create transfer requests."));
         }
 
-        if (request.Request.CampusId <= 0 || string.IsNullOrWhiteSpace(request.Request.Shift))
+        if (request.Request.CampusId <= 0 || string.IsNullOrWhiteSpace(request.Request.Shift) || string.IsNullOrWhiteSpace(request.Request.Modality))
         {
             return Task.FromResult(Result<TransferCreateResultDto>.ValidationFailure(new Dictionary<string, string[]>
             {
-                ["request"] = ["CampusId and Shift are required."]
+                ["request"] = ["CampusId, Shift and Modality are required."]
             }));
         }
 
@@ -103,3 +103,4 @@ public sealed class ReviewTransferCommandHandler(ITransferService transferServic
         return transferService.ReviewTransferAsync(currentUser.UserId.Value, request.TransferId, request.Request, cancellationToken);
     }
 }
+

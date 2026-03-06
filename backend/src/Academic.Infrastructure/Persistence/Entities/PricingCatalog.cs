@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Academic.Infrastructure.Persistence.Scaffold;
+namespace Academic.Infrastructure.Persistence;
 
 public partial class PricingCatalog
 {
@@ -21,3 +21,5 @@ public partial class PricingCatalog
 
     public virtual Program? Program { get; set; }
 }
+
+

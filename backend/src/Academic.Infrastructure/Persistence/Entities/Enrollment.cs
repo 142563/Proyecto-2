@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Academic.Infrastructure.Persistence.Scaffold;
+namespace Academic.Infrastructure.Persistence;
 
 public partial class Enrollment
 {
@@ -23,3 +23,5 @@ public partial class Enrollment
 
     public virtual Student Student { get; set; } = null!;
 }
+
+

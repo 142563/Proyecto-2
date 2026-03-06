@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Academic.Infrastructure.Persistence.Scaffold;
+namespace Academic.Infrastructure.Persistence;
 
 public partial class Role
 {
@@ -13,3 +13,5 @@ public partial class Role
 
     public virtual ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
 }
+
+
