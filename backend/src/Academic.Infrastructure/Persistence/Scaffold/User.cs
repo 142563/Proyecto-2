@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Academic.Infrastructure.Persistence.Scaffold;
@@ -20,6 +20,8 @@ public partial class User
     public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
 
     public virtual Student? Student { get; set; }
+
+    public virtual ICollection<TransferRequest> TransferRequests { get; set; } = new List<TransferRequest>();
 
     public virtual ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
 }

@@ -11,6 +11,14 @@ namespace Academic.Api.Controllers;
 public sealed class CertificatesController(IMediator mediator) : ControllerBase
 {
     [Authorize(Roles = "Student")]
+    [HttpGet("my")]
+    public async Task<ActionResult> My(CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetMyCertificatesQuery(), cancellationToken);
+        return this.ToActionResult(result);
+    }
+
+    [Authorize(Roles = "Student")]
     [HttpPost]
     public async Task<ActionResult> Create([FromBody] CreateCertificateDto request, CancellationToken cancellationToken)
     {
@@ -37,6 +45,14 @@ public sealed class CertificatesController(IMediator mediator) : ControllerBase
         }
 
         return File(result.Value.Content, result.Value.ContentType, result.Value.FileName);
+    }
+
+    [Authorize(Roles = "Student")]
+    [HttpPost("{id:guid}/cancel")]
+    public async Task<ActionResult> Cancel([FromRoute] Guid id, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new CancelCertificateCommand(id), cancellationToken);
+        return this.ToActionResult(result);
     }
 
     [AllowAnonymous]

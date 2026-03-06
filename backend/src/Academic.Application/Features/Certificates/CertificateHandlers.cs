@@ -80,3 +80,35 @@ public sealed class VerifyCertificateQueryHandler(ICertificateService certificat
         return certificateService.VerifyAsync(request.VerificationCode, cancellationToken);
     }
 }
+
+public sealed record GetMyCertificatesQuery : IRequest<Result<IReadOnlyList<CertificateSummaryDto>>>;
+
+public sealed class GetMyCertificatesQueryHandler(ICertificateService certificateService, ICurrentUser currentUser)
+    : IRequestHandler<GetMyCertificatesQuery, Result<IReadOnlyList<CertificateSummaryDto>>>
+{
+    public Task<Result<IReadOnlyList<CertificateSummaryDto>>> Handle(GetMyCertificatesQuery request, CancellationToken cancellationToken)
+    {
+        if (!currentUser.StudentId.HasValue)
+        {
+            return Task.FromResult(Result<IReadOnlyList<CertificateSummaryDto>>.Failure("forbidden", "Only students can query certificates."));
+        }
+
+        return certificateService.GetMyCertificatesAsync(currentUser.StudentId.Value, cancellationToken);
+    }
+}
+
+public sealed record CancelCertificateCommand(Guid CertificateId) : IRequest<Result<CertificateCancellationDto>>;
+
+public sealed class CancelCertificateCommandHandler(ICertificateService certificateService, ICurrentUser currentUser)
+    : IRequestHandler<CancelCertificateCommand, Result<CertificateCancellationDto>>
+{
+    public Task<Result<CertificateCancellationDto>> Handle(CancelCertificateCommand request, CancellationToken cancellationToken)
+    {
+        if (!currentUser.StudentId.HasValue)
+        {
+            return Task.FromResult(Result<CertificateCancellationDto>.Failure("forbidden", "Only students can cancel certificates."));
+        }
+
+        return certificateService.CancelAsync(currentUser.StudentId.Value, request.CertificateId, cancellationToken);
+    }
+}

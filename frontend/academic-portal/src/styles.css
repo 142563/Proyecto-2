@@ -1,9 +1,16 @@
+﻿@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Source+Sans+3:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 :root {
-  --brand-900: #0f172a;
-  --brand-700: #334155;
-  --surface: #f1f5f9;
+  --umg-navy-950: #071a31;
+  --umg-navy-900: #0b2749;
+  --umg-navy-700: #1a436f;
+  --umg-gold-500: #c9a24f;
+  --umg-gold-400: #e0bc6b;
+  --umg-surface: #f4f7fb;
+  --umg-card: #ffffff;
+  --umg-text: #0f2239;
+  --umg-muted: #5f6f84;
 }
 
 html,
@@ -13,6 +20,97 @@ body {
 
 body {
   margin: 0;
-  background: radial-gradient(circle at 10% 10%, #ffffff 0%, #e2e8f0 45%, #cbd5e1 100%);
-  font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+  color: var(--umg-text);
+  background:
+    radial-gradient(circle at 5% 10%, rgba(201, 162, 79, 0.18) 0%, rgba(201, 162, 79, 0) 34%),
+    radial-gradient(circle at 95% 0%, rgba(26, 67, 111, 0.18) 0%, rgba(26, 67, 111, 0) 40%),
+    linear-gradient(145deg, #f8fbff 0%, #edf3fb 50%, #e8eff8 100%);
+  font-family: 'Source Sans 3', 'Segoe UI', sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4,
+.font-display {
+  font-family: 'Montserrat', 'Segoe UI', sans-serif;
+}
+
+.panel {
+  border: 1px solid #d5deea;
+  border-radius: 1rem;
+  background: var(--umg-card);
+  box-shadow: 0 10px 30px rgba(7, 26, 49, 0.06);
+}
+
+.section-title {
+  color: var(--umg-navy-900);
+  font-family: 'Montserrat', 'Segoe UI', sans-serif;
+  font-weight: 700;
+}
+
+.btn-primary {
+  border: none;
+  border-radius: 0.75rem;
+  background: linear-gradient(120deg, var(--umg-navy-900), var(--umg-navy-700));
+  color: #fff;
+  font-weight: 700;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(11, 39, 73, 0.26);
+}
+
+.btn-secondary {
+  border: 1px solid #bfd0e3;
+  border-radius: 0.75rem;
+  background: #fff;
+  color: var(--umg-navy-900);
+  font-weight: 600;
+}
+
+.btn-danger {
+  border: none;
+  border-radius: 0.75rem;
+  background: #b42318;
+  color: #fff;
+  font-weight: 700;
+}
+
+.input-control {
+  width: 100%;
+  border: 1px solid #c4d2e3;
+  border-radius: 0.75rem;
+  padding: 0.62rem 0.8rem;
+  color: #0f2239;
+  background: #fff;
+}
+
+.input-control:focus {
+  outline: none;
+  border-color: var(--umg-navy-700);
+  box-shadow: 0 0 0 3px rgba(26, 67, 111, 0.15);
+}
+
+.table-clean th {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #5f6f84;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.table-clean td {
+  color: #22354b;
+}
+
+.text-muted {
+  color: var(--umg-muted);
+}
+
+.currency-gtq::before {
+  content: 'Q';
+  margin-right: 0.15rem;
 }

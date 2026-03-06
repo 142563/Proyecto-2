@@ -1,4 +1,5 @@
-import { CommonModule } from '@angular/common';
+﻿import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -9,43 +10,31 @@ import { AuthService } from '../../core/auth/auth.service';
   selector: 'app-login-page',
   imports: [CommonModule, ReactiveFormsModule],
   template: `
-    <div class="mx-auto mt-16 max-w-md rounded-2xl bg-white p-8 shadow-lg">
-      <h1 class="text-2xl font-bold text-slate-900">Ingreso Institucional</h1>
-      <p class="mt-1 text-sm text-slate-500">Usa tu correo institucional y contrasena.</p>
+    <div class="mx-auto mt-12 max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-xl">
+      <p class="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--umg-navy-700)]">Universidad Mariano Gálvez de Guatemala</p>
+      <h1 class="font-display mt-2 text-3xl font-extrabold text-[color:var(--umg-navy-900)]">Ingreso Institucional</h1>
+      <p class="mt-2 text-sm text-muted">Usa tu correo institucional y contraseña.</p>
 
       <form class="mt-6 space-y-4" [formGroup]="form" (ngSubmit)="submit()">
         <div>
           <label class="mb-1 block text-xs font-semibold uppercase text-slate-500">Correo</label>
-          <input
-            class="w-full rounded-lg border border-slate-300 px-3 py-2"
-            formControlName="email"
-            type="email"
-            placeholder="usuario@universidad.edu"
-          />
+          <input class="input-control" formControlName="email" type="email" placeholder="usuario@umg.edu.gt" />
         </div>
 
         <div>
-          <label class="mb-1 block text-xs font-semibold uppercase text-slate-500">Contrasena</label>
-          <input
-            class="w-full rounded-lg border border-slate-300 px-3 py-2"
-            formControlName="password"
-            type="password"
-            placeholder="********"
-          />
+          <label class="mb-1 block text-xs font-semibold uppercase text-slate-500">Contraseña</label>
+          <input class="input-control" formControlName="password" type="password" placeholder="********" />
         </div>
 
         <p *ngIf="error" class="rounded-lg bg-rose-100 px-3 py-2 text-sm text-rose-700">{{ error }}</p>
 
-        <button
-          class="w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-          [disabled]="loading"
-        >
-          {{ loading ? 'Ingresando...' : 'Iniciar sesion' }}
+        <button class="btn-primary w-full px-4 py-2.5 text-sm" [disabled]="loading">
+          {{ loading ? 'Ingresando...' : 'Iniciar sesión' }}
         </button>
       </form>
 
-      <p class="mt-5 text-xs text-slate-500">
-        Demo: admin@universidad.edu / Admin123! | ana.gomez@alumnos.universidad.edu / Student123!
+      <p class="mt-5 text-xs text-muted">
+        Demo: admin@umg.edu.gt / Admin123! | ana.gomez@alumnos.umg.edu.gt / Student123!
       </p>
     </div>
   `
@@ -77,15 +66,18 @@ export class LoginPage {
       next: (response) => {
         this.loading = false;
         if (!response.success) {
-          this.error = response.error?.message ?? 'No fue posible iniciar sesion.';
+          this.error = response.error?.message ?? 'No fue posible iniciar sesión.';
           return;
         }
 
         this.router.navigate(['/dashboard']);
       },
-      error: () => {
+      error: (error: HttpErrorResponse) => {
         this.loading = false;
-        this.error = 'Error de conexion con el servidor.';
+        this.error =
+          error.error?.error?.message ??
+          error.error?.message ??
+          (error.status === 0 ? 'Error de conexión con el servidor.' : 'No fue posible iniciar sesión.');
       }
     });
   }

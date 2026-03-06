@@ -1,69 +1,73 @@
-# Arquitectura del Monorepo Academico
+﻿# Arquitectura del Monorepo Academico UMG
 
 ## 1. Contexto
-Solucion full-stack para gestion academica con enfoque DDD + Clean Architecture, autenticacion JWT por roles y persistencia PostgreSQL Database-First.
+Solucion full-stack para gestion academica universitaria (Universidad Mariano Galvez de Guatemala) con enfoque DDD + Clean Architecture, autenticacion JWT por roles y persistencia PostgreSQL con DB-first.
 
 ## 2. Estructura
-- `backend/src/Academic.Domain`: reglas y objetos de dominio.
+- `backend/src/Academic.Domain`: reglas y value objects de dominio.
 - `backend/src/Academic.Application`: contratos, DTOs, CQRS (MediatR), `Result<T>`.
-- `backend/src/Academic.Infrastructure`: EF Core Scaffold, adapters, servicios de negocio, JWT, PDF, email, auditoria.
-- `backend/src/Academic.Api`: controladores REST, seguridad, Swagger, middleware de errores.
-- `frontend/academic-portal`: Angular 20 + Tailwind por features.
-- `db`: `schema.sql` y `seed.sql` como fuente de verdad DB-first.
+- `backend/src/Academic.Infrastructure`: EF Core Scaffold, adapters y servicios de negocio.
+- `backend/src/Academic.Api`: controllers REST, seguridad, middleware global y Swagger.
+- `frontend/academic-portal`: Angular 20 + Tailwind organizado por features.
+- `db`: `schema.sql`, `seed.sql`, `data_fix_consistency.sql` como fuente de verdad DB-first.
 
 ## 3. Patrones aplicados
 ### DDD / Clean
-- Dependencias dirigidas hacia adentro (`Api -> Application -> Domain`, `Infrastructure -> Application + Domain`).
-- Entidades scaffold separadas de reglas de negocio mediante servicios/adapters.
+- Dependencias hacia adentro (`Api -> Application -> Domain`, `Infrastructure -> Application + Domain`).
+- Entidades scaffold separadas de la logica de negocio en servicios de infraestructura.
 
 ### CQRS
-- Handlers MediatR por caso de uso (login, traslado, asignacion, pagos, certificaciones, reportes).
+- Handlers MediatR por caso de uso (auth, traslados, asignacion, pagos, certificaciones, reportes).
 
 ### Resultado estandar
-- `Result<T>` para respuestas consistentes y manejo de errores funcionales.
+- `Result<T>` para respuestas consistentes y errores funcionales controlados.
 
-## 4. Database-First
-- Dise�o en `db/schema.sql` con constraints, indices y estados controlados.
-- Seed en `db/seed.sql` para demo inmediata.
-- Reverse engineering EF Core a `Persistence/Scaffold`.
-- Regla de proyecto: no incorporar logica de negocio dentro de clases scaffold.
+## 4. DB-first y consistencia
+- Diseño SQL en `db/schema.sql`.
+- Seeds UMG y catalogo GTQ en `db/seed.sql`.
+- Limpieza anti-inconsistencias y estados huerfanos en `db/data_fix_consistency.sql`.
+- Regla del proyecto: no colocar logica de negocio dentro de clases scaffold.
 
 ## 5. Seguridad
 - JWT firmado con clave simetrica.
 - Roles `Student` y `Admin`.
-- Hash de contrasenas con BCrypt (hashes sembrados por `pgcrypto` en seed).
-- Lista blanca de dominios institucionales configurable (`Auth__AllowedEmailDomains`).
+- Hash de contrasenas con BCrypt (`pgcrypto` en seed + verificacion BCrypt.Net).
+- Lista blanca de dominios institucionales configurable.
 - Auto logout por inactividad en frontend.
 
-## 6. Modulos
+## 6. Politica anti-bloqueo
+Se aplica una regla operacional por modulo (`transfer`, `enrollment`, `certificate`):
+- Maximo una solicitud activa por estudiante.
+- `PendingPayment` expira automaticamente en 72 horas.
+- Al expirar pago pendiente, se cancela la solicitud asociada.
+- El estudiante puede cancelar solicitudes pendientes de pago manualmente.
+
+## 7. Flujos clave
 ### Traslado de sede
-- Consulta sedes y disponibilidad por jornada.
-- Validacion de cupos y duplicidad de solicitud activa.
-- Creacion automatica de orden de pago.
+- Consulta disponibilidad por sede/jornada.
+- Crea solicitud + orden de pago en GTQ con expiracion.
+- Admin revisa `PendingReview` (`Approved`/`Rejected`).
+- Si se aprueba, se actualiza sede/jornada del estudiante y cupos de capacidad.
 
 ### Asignacion de cursos
-- Pensum por estudiante.
-- Deteccion de cursos atrasados (Failed sin Passed posterior).
-- Validacion de prerequisitos y cupos logicos por capacidad configurable.
-- Orden de pago automatica.
+- Detecta atrasados por historial (`Failed` sin `Passed` posterior).
+- Valida prerequisitos y cupos.
+- Crea asignacion + orden de pago en GTQ con expiracion.
+- Permite cancelacion si esta pendiente de pago.
 
 ### Certificacion digital
-- Solicitud crea orden de pago.
+- Solicitud genera orden en GTQ.
 - Generacion PDF solo cuando pago esta en `Paid`.
-- Codigo unico de verificacion.
-- Descarga y envio por email (SMTP o mock).
+- Codigo unico de verificacion y opcion de envio por email.
+- Permite cancelacion si el estado es `Requested`.
 
-### Reportes admin
-- Reportes de traslados, asignaciones y certificaciones.
-- Export PDF (QuestPDF) y Excel (ClosedXML).
-
-## 7. Observabilidad y calidad
+## 8. Observabilidad y calidad
 - Serilog para logging estructurado.
 - Middleware global de excepciones.
 - Swagger/OpenAPI con seguridad Bearer.
-- Pruebas unitarias basicas en Domain/Application.
+- Pruebas unitarias base en Domain/Application.
 
-## 8. Trade-offs
-- Se priorizo una implementacion de referencia ejecutable y didactica para entorno universitario.
-- Repositorios por agregado se encapsulan en servicios de negocio por modulo para mantener simpleza del prototipo.
-- Validacion de cupos de cursos se controla por capacidad configurable en app (`Academic:DefaultCourseCapacity`) usando conteo de inscripciones confirmadas.
+## 9. Trade-offs
+- Se priorizo trazabilidad y coherencia de estado sobre simplicidad de flujo.
+- La expiracion de pagos se implementa en capa de negocio para mantener control de reglas sin jobs externos obligatorios.
+- Tarifas GTQ son referenciales y configurables en DB (no arancel contractual).

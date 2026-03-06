@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Academic.Infrastructure.Persistence.Scaffold;
@@ -16,6 +16,10 @@ public partial class Campus
     public bool IsActive { get; set; }
 
     public DateTime CreatedAt { get; set; }
+
+    public string CampusType { get; set; } = null!;
+
+    public string? Region { get; set; }
 
     public virtual ICollection<CampusShiftCapacity> CampusShiftCapacities { get; set; } = new List<CampusShiftCapacity>();
 

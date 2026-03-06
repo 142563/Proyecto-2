@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Academic.Infrastructure.Persistence.Scaffold;
@@ -23,7 +23,15 @@ public partial class TransferRequest
 
     public DateTime UpdatedAt { get; set; }
 
+    public Guid? ReviewedByUserId { get; set; }
+
+    public DateTime? ReviewedAt { get; set; }
+
+    public string? ReviewNotes { get; set; }
+
     public virtual Campus? FromCampus { get; set; }
+
+    public virtual User? ReviewedByUser { get; set; }
 
     public virtual Student Student { get; set; } = null!;
 

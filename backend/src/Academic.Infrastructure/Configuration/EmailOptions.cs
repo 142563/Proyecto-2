@@ -8,5 +8,5 @@ public sealed class EmailOptions
     public string Pass { get; set; } = string.Empty;
     public bool UseSsl { get; set; } = false;
     public bool UseMock { get; set; } = true;
-    public string From { get; set; } = "noreply@universidad.edu";
+    public string From { get; set; } = "noreply@umg.edu.gt";
 }

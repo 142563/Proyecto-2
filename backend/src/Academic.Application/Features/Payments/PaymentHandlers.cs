@@ -21,6 +21,15 @@ public sealed class GetMyPaymentsQueryHandler(IPaymentService paymentService, IC
     }
 }
 
+public sealed record GetPendingPaymentsQuery : IRequest<Result<IReadOnlyList<PaymentOrderDto>>>;
+
+public sealed class GetPendingPaymentsQueryHandler(IPaymentService paymentService)
+    : IRequestHandler<GetPendingPaymentsQuery, Result<IReadOnlyList<PaymentOrderDto>>>
+{
+    public Task<Result<IReadOnlyList<PaymentOrderDto>>> Handle(GetPendingPaymentsQuery request, CancellationToken cancellationToken)
+        => paymentService.GetPendingPaymentsAsync(cancellationToken);
+}
+
 public sealed record MarkPaymentPaidCommand(Guid PaymentId) : IRequest<Result<PaymentOrderDto>>;
 
 public sealed class MarkPaymentPaidCommandHandler(IPaymentService paymentService, ICurrentUser currentUser)

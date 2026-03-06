@@ -21,8 +21,11 @@ CREATE TABLE IF NOT EXISTS campuses (
     code        VARCHAR(20) NOT NULL UNIQUE,
     name        VARCHAR(180) NOT NULL UNIQUE,
     address     VARCHAR(280) NOT NULL,
+    campus_type VARCHAR(20) NOT NULL DEFAULT 'Campus',
+    region      VARCHAR(60) NULL,
     is_active   BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT chk_campuses_type CHECK (campus_type IN ('Campus', 'Centro'))
 );
 
 CREATE TABLE IF NOT EXISTS shifts (
@@ -115,6 +118,9 @@ CREATE TABLE IF NOT EXISTS transfer_requests (
     to_shift_id      SMALLINT NOT NULL REFERENCES shifts(id) ON DELETE RESTRICT,
     reason           VARCHAR(500) NULL,
     status           VARCHAR(30) NOT NULL,
+    reviewed_by_user_id UUID NULL REFERENCES users(id) ON DELETE SET NULL,
+    reviewed_at      TIMESTAMPTZ NULL,
+    review_notes     VARCHAR(500) NULL,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT chk_transfer_status CHECK (status IN ('PendingPayment', 'PendingReview', 'Approved', 'Rejected', 'Cancelled')),
@@ -147,14 +153,17 @@ CREATE TABLE IF NOT EXISTS payment_orders (
     order_type     VARCHAR(20) NOT NULL,
     reference_id   UUID NOT NULL,
     amount         NUMERIC(12,2) NOT NULL,
+    currency       VARCHAR(3) NOT NULL DEFAULT 'GTQ',
     status         VARCHAR(20) NOT NULL,
     description    VARCHAR(255) NOT NULL,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at     TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '72 hours'),
     paid_at        TIMESTAMPTZ NULL,
     cancelled_at   TIMESTAMPTZ NULL,
     CONSTRAINT chk_payment_order_type CHECK (order_type IN ('Transfer', 'Enrollment', 'Certificate')),
     CONSTRAINT chk_payment_order_status CHECK (status IN ('Pending', 'Paid', 'Cancelled')),
     CONSTRAINT chk_payment_amount_non_negative CHECK (amount >= 0),
+    CONSTRAINT chk_payment_currency CHECK (currency ~ '^[A-Z]{3}$'),
     CONSTRAINT uq_payment_reference UNIQUE (order_type, reference_id)
 );
 
@@ -178,13 +187,62 @@ CREATE TABLE IF NOT EXISTS pricing_catalog (
     service_type  VARCHAR(30) NOT NULL,
     program_id    INT NULL REFERENCES programs(id) ON DELETE SET NULL,
     amount        NUMERIC(12,2) NOT NULL,
-    currency      VARCHAR(3) NOT NULL DEFAULT 'USD',
+    currency      VARCHAR(3) NOT NULL DEFAULT 'GTQ',
     is_active     BOOLEAN NOT NULL DEFAULT TRUE,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT chk_pricing_service_type CHECK (service_type IN ('Transfer', 'Enrollment', 'CourseExtra', 'CourseOverdue', 'Certificate')),
     CONSTRAINT chk_pricing_amount CHECK (amount >= 0),
     CONSTRAINT chk_pricing_currency CHECK (currency ~ '^[A-Z]{3}$')
 );
+
+-- Compatibility updates for existing databases
+ALTER TABLE campuses
+    ADD COLUMN IF NOT EXISTS campus_type VARCHAR(20) NOT NULL DEFAULT 'Campus';
+
+ALTER TABLE campuses
+    ADD COLUMN IF NOT EXISTS region VARCHAR(60) NULL;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_campuses_type'
+    ) THEN
+        ALTER TABLE campuses
+            ADD CONSTRAINT chk_campuses_type CHECK (campus_type IN ('Campus', 'Centro'));
+    END IF;
+END $$;
+
+ALTER TABLE transfer_requests
+    ADD COLUMN IF NOT EXISTS reviewed_by_user_id UUID NULL REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE transfer_requests
+    ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ NULL;
+
+ALTER TABLE transfer_requests
+    ADD COLUMN IF NOT EXISTS review_notes VARCHAR(500) NULL;
+
+ALTER TABLE payment_orders
+    ADD COLUMN IF NOT EXISTS currency VARCHAR(3) NOT NULL DEFAULT 'GTQ';
+
+ALTER TABLE payment_orders
+    ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '72 hours');
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'chk_payment_currency'
+    ) THEN
+        ALTER TABLE payment_orders
+            ADD CONSTRAINT chk_payment_currency CHECK (currency ~ '^[A-Z]{3}$');
+    END IF;
+END $$;
+
+ALTER TABLE pricing_catalog
+    ALTER COLUMN currency SET DEFAULT 'GTQ';
 
 CREATE TABLE IF NOT EXISTS audit_logs (
     id           BIGSERIAL PRIMARY KEY,
@@ -209,10 +267,12 @@ CREATE INDEX IF NOT EXISTS idx_transfers_destination ON transfer_requests(to_cam
 CREATE INDEX IF NOT EXISTS idx_enrollments_student_status ON enrollments(student_id, status);
 CREATE INDEX IF NOT EXISTS idx_payment_orders_student_status ON payment_orders(student_id, status);
 CREATE INDEX IF NOT EXISTS idx_payment_orders_reference ON payment_orders(reference_id, order_type);
+CREATE INDEX IF NOT EXISTS idx_payment_orders_status_expires ON payment_orders(status, expires_at);
 CREATE INDEX IF NOT EXISTS idx_certificates_code ON certificates(verification_code);
 CREATE INDEX IF NOT EXISTS idx_certificates_student_status ON certificates(student_id, status);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_created ON audit_logs(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_entity_created ON audit_logs(entity_name, entity_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_campuses_type_region ON campuses(campus_type, region);
 
 -- Partial unique constraints for active requests
 CREATE UNIQUE INDEX IF NOT EXISTS uq_transfer_active_per_student

@@ -1,67 +1,87 @@
-import { CommonModule } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
+﻿import { CommonModule } from '@angular/common';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { API_BASE_URL } from '../../core/config/api.config';
 import { StatusBadgeComponent } from '../../shared/components/status-badge.component';
+import {
+  ApiEnvelope,
+  CampusResponse,
+  TransferAvailabilityResponse,
+  TransferResponse
+} from '../../shared/models/api.models';
 
 @Component({
   standalone: true,
   selector: 'app-transfers-page',
   imports: [CommonModule, FormsModule, StatusBadgeComponent],
   template: `
-    <section class="rounded-2xl bg-white p-6 shadow-sm">
-      <h2 class="text-lg font-bold">Solicitud de Traslado</h2>
+    <section class="panel p-6">
+      <h2 class="section-title text-xl">Solicitud de Traslado de Sede</h2>
+      <p class="mt-1 text-sm text-muted">Selecciona campus/centro y jornada para validar cupo.</p>
+
       <div class="mt-4 grid gap-3 md:grid-cols-3">
-        <select class="rounded-lg border border-slate-300 px-3 py-2" [(ngModel)]="campusId">
+        <select class="input-control" [(ngModel)]="campusId">
           <option [ngValue]="0">Selecciona sede</option>
-          <option *ngFor="let campus of campuses" [ngValue]="campus.id">{{ campus.name }}</option>
+          <option *ngFor="let campus of campuses" [ngValue]="campus.id">
+            {{ campus.name }} · {{ campus.campusType }}{{ campus.region ? ' · ' + campus.region : '' }}
+          </option>
         </select>
 
-        <select class="rounded-lg border border-slate-300 px-3 py-2" [(ngModel)]="shift">
-          <option value="Saturday">Saturday</option>
-          <option value="Sunday">Sunday</option>
+        <select class="input-control" [(ngModel)]="shift">
+          <option value="Saturday">Sábado</option>
+          <option value="Sunday">Domingo</option>
         </select>
 
-        <button class="rounded-lg bg-slate-900 px-4 py-2 text-white" (click)="checkAvailability()">Validar cupo</button>
+        <button class="btn-secondary px-4 py-2" (click)="checkAvailability()">Validar cupo</button>
       </div>
 
       <textarea
-        class="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2"
+        class="input-control mt-3"
         rows="3"
         [(ngModel)]="reason"
         placeholder="Motivo del traslado"
       ></textarea>
 
-      <p *ngIf="availabilityText" class="mt-2 text-sm text-slate-600">{{ availabilityText }}</p>
+      <p *ngIf="availabilityText" class="mt-2 text-sm text-[color:var(--umg-navy-900)]">{{ availabilityText }}</p>
       <p *ngIf="message" class="mt-2 text-sm text-emerald-700">{{ message }}</p>
       <p *ngIf="error" class="mt-2 text-sm text-rose-700">{{ error }}</p>
 
-      <button class="mt-4 rounded-lg bg-emerald-700 px-4 py-2 text-white" (click)="createTransfer()">
+      <button class="btn-primary mt-4 px-4 py-2" (click)="createTransfer()" [disabled]="campusId <= 0">
         Crear solicitud
       </button>
     </section>
 
-    <section class="mt-6 rounded-2xl bg-white p-6 shadow-sm">
-      <h3 class="text-lg font-bold">Mis solicitudes</h3>
+    <section class="panel mt-6 p-6">
+      <h3 class="section-title text-lg">Mis solicitudes</h3>
       <div class="mt-4 overflow-x-auto">
-        <table class="w-full text-left text-sm">
+        <table class="table-clean w-full text-left text-sm">
           <thead>
-            <tr class="border-b text-slate-500">
+            <tr class="border-b border-slate-200">
               <th class="py-2">Fecha</th>
               <th>Origen</th>
               <th>Destino</th>
               <th>Jornada</th>
               <th>Estado</th>
+              <th class="text-right">Acción</th>
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let item of transfers" class="border-b">
+            <tr *ngFor="let item of transfers" class="border-b border-slate-100">
               <td class="py-2">{{ item.createdAt | date:'short' }}</td>
               <td>{{ item.fromCampus }}</td>
               <td>{{ item.toCampus }}</td>
-              <td>{{ item.shift }}</td>
+              <td>{{ item.shift === 'Saturday' ? 'Sábado' : 'Domingo' }}</td>
               <td><app-status-badge [label]="item.status"></app-status-badge></td>
+              <td class="text-right">
+                <button
+                  *ngIf="item.status === 'PendingPayment'"
+                  class="btn-danger px-3 py-1 text-xs"
+                  (click)="cancelTransfer(item.transferId)"
+                >
+                  Cancelar
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -73,10 +93,10 @@ export class TransfersPage {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = API_BASE_URL;
 
-  campuses: any[] = [];
-  transfers: any[] = [];
+  campuses: CampusResponse[] = [];
+  transfers: TransferResponse[] = [];
   campusId = 0;
-  shift = 'Saturday';
+  shift: 'Saturday' | 'Sunday' = 'Saturday';
   reason = '';
   availabilityText = '';
   message = '';
@@ -88,7 +108,7 @@ export class TransfersPage {
   }
 
   loadCampuses(): void {
-    this.http.get<any>(`${this.baseUrl}/campuses`).subscribe((response) => {
+    this.http.get<ApiEnvelope<CampusResponse[]>>(`${this.baseUrl}/campuses`).subscribe((response) => {
       if (response.success) {
         this.campuses = response.data;
       }
@@ -96,7 +116,7 @@ export class TransfersPage {
   }
 
   loadMyTransfers(): void {
-    this.http.get<any>(`${this.baseUrl}/transfers/my`).subscribe((response) => {
+    this.http.get<ApiEnvelope<TransferResponse[]>>(`${this.baseUrl}/transfers/my`).subscribe((response) => {
       this.transfers = response.success ? response.data : [];
     });
   }
@@ -104,7 +124,7 @@ export class TransfersPage {
   checkAvailability(): void {
     this.error = '';
     this.http
-      .get<any>(`${this.baseUrl}/transfers/availability`, {
+      .get<ApiEnvelope<TransferAvailabilityResponse>>(`${this.baseUrl}/transfers/availability`, {
         params: { campusId: this.campusId, shift: this.shift }
       })
       .subscribe({
@@ -115,10 +135,10 @@ export class TransfersPage {
           }
 
           const data = response.data;
-          this.availabilityText = `Cupos: ${data.availableCapacity}/${data.totalCapacity} en ${data.campusName} - ${data.shiftName}`;
+          this.availabilityText = `Cupos: ${data.availableCapacity}/${data.totalCapacity} en ${data.campusName} - ${data.shiftName === 'Saturday' ? 'Sábado' : 'Domingo'}`;
         },
-        error: () => {
-          this.error = 'Error de conexion.';
+        error: (error: HttpErrorResponse) => {
+          this.error = error.error?.error?.message ?? 'Error de conexión.';
         }
       });
   }
@@ -128,7 +148,7 @@ export class TransfersPage {
     this.message = '';
 
     this.http
-      .post<any>(`${this.baseUrl}/transfers`, {
+      .post<ApiEnvelope<{ paymentOrderId: string; amount: number; currency: string; expiresAt: string }>>(`${this.baseUrl}/transfers`, {
         campusId: this.campusId,
         shift: this.shift,
         reason: this.reason
@@ -140,12 +160,32 @@ export class TransfersPage {
             return;
           }
 
-          this.message = `Solicitud creada. Orden de pago: ${response.data.paymentOrderId}`;
+          this.message = `Solicitud creada. Orden de pago ${response.data.paymentOrderId} por Q${response.data.amount.toFixed(2)} (${response.data.currency}).`;
           this.loadMyTransfers();
         },
-        error: () => {
-          this.error = 'Error de conexion.';
+        error: (error: HttpErrorResponse) => {
+          this.error = error.error?.error?.message ?? 'Error de conexión.';
         }
       });
+  }
+
+  cancelTransfer(transferId: string): void {
+    this.error = '';
+    this.message = '';
+
+    this.http.post<ApiEnvelope<{ transferId: string }>>(`${this.baseUrl}/transfers/${transferId}/cancel`, {}).subscribe({
+      next: (response) => {
+        if (!response.success) {
+          this.error = response.error?.message ?? 'No se pudo cancelar la solicitud.';
+          return;
+        }
+
+        this.message = 'Solicitud de traslado cancelada.';
+        this.loadMyTransfers();
+      },
+      error: (error: HttpErrorResponse) => {
+        this.error = error.error?.error?.message ?? 'Error de conexión.';
+      }
+    });
   }
 }

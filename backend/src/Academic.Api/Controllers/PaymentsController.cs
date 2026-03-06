@@ -19,6 +19,14 @@ public sealed class PaymentsController(IMediator mediator) : ControllerBase
     }
 
     [Authorize(Roles = "Admin")]
+    [HttpGet("pending")]
+    public async Task<ActionResult> Pending(CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetPendingPaymentsQuery(), cancellationToken);
+        return this.ToActionResult(result);
+    }
+
+    [Authorize(Roles = "Admin")]
     [HttpPost("{id:guid}/mark-paid")]
     public async Task<ActionResult> MarkPaid([FromRoute] Guid id, CancellationToken cancellationToken)
     {

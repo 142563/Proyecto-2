@@ -37,6 +37,22 @@ public sealed class GetOverdueCoursesQueryHandler(ICourseService courseService, 
     }
 }
 
+public sealed record GetMyEnrollmentsQuery : IRequest<Result<IReadOnlyList<EnrollmentSummaryDto>>>;
+
+public sealed class GetMyEnrollmentsQueryHandler(ICourseService courseService, ICurrentUser currentUser)
+    : IRequestHandler<GetMyEnrollmentsQuery, Result<IReadOnlyList<EnrollmentSummaryDto>>>
+{
+    public Task<Result<IReadOnlyList<EnrollmentSummaryDto>>> Handle(GetMyEnrollmentsQuery request, CancellationToken cancellationToken)
+    {
+        if (!currentUser.StudentId.HasValue)
+        {
+            return Task.FromResult(Result<IReadOnlyList<EnrollmentSummaryDto>>.Failure("forbidden", "Only students can query enrollments."));
+        }
+
+        return courseService.GetMyEnrollmentsAsync(currentUser.StudentId.Value, cancellationToken);
+    }
+}
+
 public sealed record CreateEnrollmentCommand(CreateEnrollmentDto Request) : IRequest<Result<EnrollmentResultDto>>;
 
 public sealed class CreateEnrollmentCommandHandler(ICourseService courseService, ICurrentUser currentUser)
@@ -58,5 +74,21 @@ public sealed class CreateEnrollmentCommandHandler(ICourseService courseService,
         }
 
         return courseService.CreateEnrollmentAsync(currentUser.StudentId.Value, request.Request, cancellationToken);
+    }
+}
+
+public sealed record CancelEnrollmentCommand(Guid EnrollmentId) : IRequest<Result<EnrollmentCancellationDto>>;
+
+public sealed class CancelEnrollmentCommandHandler(ICourseService courseService, ICurrentUser currentUser)
+    : IRequestHandler<CancelEnrollmentCommand, Result<EnrollmentCancellationDto>>
+{
+    public Task<Result<EnrollmentCancellationDto>> Handle(CancelEnrollmentCommand request, CancellationToken cancellationToken)
+    {
+        if (!currentUser.StudentId.HasValue)
+        {
+            return Task.FromResult(Result<EnrollmentCancellationDto>.Failure("forbidden", "Only students can cancel enrollments."));
+        }
+
+        return courseService.CancelEnrollmentAsync(currentUser.StudentId.Value, request.EnrollmentId, cancellationToken);
     }
 }

@@ -7,10 +7,11 @@ using Microsoft.AspNetCore.Mvc;
 namespace Academic.Api.Controllers;
 
 [ApiController]
-[Authorize(Roles = "Student")]
+[Authorize]
 [Route("transfers")]
 public sealed class TransfersController(IMediator mediator) : ControllerBase
 {
+    [Authorize(Roles = "Student")]
     [HttpGet("availability")]
     public async Task<ActionResult> GetAvailability([FromQuery] int campusId, [FromQuery] string shift, CancellationToken cancellationToken)
     {
@@ -18,6 +19,7 @@ public sealed class TransfersController(IMediator mediator) : ControllerBase
         return this.ToActionResult(result);
     }
 
+    [Authorize(Roles = "Student")]
     [HttpPost]
     public async Task<ActionResult> Create([FromBody] CreateTransferDto request, CancellationToken cancellationToken)
     {
@@ -25,10 +27,27 @@ public sealed class TransfersController(IMediator mediator) : ControllerBase
         return this.ToActionResult(result);
     }
 
+    [Authorize(Roles = "Student")]
     [HttpGet("my")]
     public async Task<ActionResult> My(CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new GetMyTransfersQuery(), cancellationToken);
+        return this.ToActionResult(result);
+    }
+
+    [Authorize(Roles = "Student")]
+    [HttpPost("{id:guid}/cancel")]
+    public async Task<ActionResult> Cancel([FromRoute] Guid id, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new CancelTransferCommand(id), cancellationToken);
+        return this.ToActionResult(result);
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPost("{id:guid}/review")]
+    public async Task<ActionResult> Review([FromRoute] Guid id, [FromBody] ReviewTransferDto request, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new ReviewTransferCommand(id, request), cancellationToken);
         return this.ToActionResult(result);
     }
 }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Academic.Infrastructure.Persistence.Scaffold;
@@ -24,6 +24,10 @@ public partial class PaymentOrder
     public DateTime? PaidAt { get; set; }
 
     public DateTime? CancelledAt { get; set; }
+
+    public string Currency { get; set; } = null!;
+
+    public DateTime ExpiresAt { get; set; }
 
     public virtual Certificate? Certificate { get; set; }
 

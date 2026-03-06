@@ -16,6 +16,7 @@ var connectionString = NormalizeConnectionString(rawConnectionString);
 var repoRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", ".."));
 var schemaPath = Path.Combine(repoRoot, "db", "schema.sql");
 var seedPath = Path.Combine(repoRoot, "db", "seed.sql");
+var dataFixPath = Path.Combine(repoRoot, "db", "data_fix_consistency.sql");
 
 if (!File.Exists(schemaPath) || !File.Exists(seedPath))
 {
@@ -26,7 +27,13 @@ if (!File.Exists(schemaPath) || !File.Exists(seedPath))
 await using var connection = new NpgsqlConnection(connectionString);
 await connection.OpenAsync();
 
-foreach (var scriptPath in new[] { schemaPath, seedPath })
+var scripts = new List<string> { schemaPath, seedPath };
+if (File.Exists(dataFixPath))
+{
+    scripts.Add(dataFixPath);
+}
+
+foreach (var scriptPath in scripts)
 {
     var sql = await File.ReadAllTextAsync(scriptPath, Encoding.UTF8);
     var scriptName = Path.GetFileName(scriptPath);

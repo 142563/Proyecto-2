@@ -5,8 +5,11 @@ public sealed record PaymentOrderDto(
     string OrderType,
     Guid ReferenceId,
     decimal Amount,
+    string Currency,
     string Status,
     string Description,
     DateTime CreatedAt,
-    DateTime? PaidAt
+    DateTime ExpiresAt,
+    DateTime? PaidAt,
+    DateTime? CancelledAt
 );

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 
@@ -96,10 +96,16 @@ public partial class AcademicDbContext : DbContext
 
             entity.HasIndex(e => e.Name, "campuses_name_key").IsUnique();
 
+            entity.HasIndex(e => new { e.CampusType, e.Region }, "idx_campuses_type_region");
+
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.Address)
                 .HasMaxLength(280)
                 .HasColumnName("address");
+            entity.Property(e => e.CampusType)
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'Campus'::character varying")
+                .HasColumnName("campus_type");
             entity.Property(e => e.Code)
                 .HasMaxLength(20)
                 .HasColumnName("code");
@@ -112,6 +118,9 @@ public partial class AcademicDbContext : DbContext
             entity.Property(e => e.Name)
                 .HasMaxLength(180)
                 .HasColumnName("name");
+            entity.Property(e => e.Region)
+                .HasMaxLength(60)
+                .HasColumnName("region");
         });
 
         modelBuilder.Entity<CampusShiftCapacity>(entity =>
@@ -331,6 +340,8 @@ public partial class AcademicDbContext : DbContext
 
             entity.HasIndex(e => new { e.ReferenceId, e.OrderType }, "idx_payment_orders_reference");
 
+            entity.HasIndex(e => new { e.Status, e.ExpiresAt }, "idx_payment_orders_status_expires");
+
             entity.HasIndex(e => new { e.StudentId, e.Status }, "idx_payment_orders_student_status");
 
             entity.HasIndex(e => new { e.OrderType, e.ReferenceId }, "uq_payment_reference").IsUnique();
@@ -345,9 +356,16 @@ public partial class AcademicDbContext : DbContext
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("now()")
                 .HasColumnName("created_at");
+            entity.Property(e => e.Currency)
+                .HasMaxLength(3)
+                .HasDefaultValueSql("'GTQ'::character varying")
+                .HasColumnName("currency");
             entity.Property(e => e.Description)
                 .HasMaxLength(255)
                 .HasColumnName("description");
+            entity.Property(e => e.ExpiresAt)
+                .HasDefaultValueSql("(now() + '72:00:00'::interval)")
+                .HasColumnName("expires_at");
             entity.Property(e => e.OrderType)
                 .HasMaxLength(20)
                 .HasColumnName("order_type");
@@ -378,7 +396,7 @@ public partial class AcademicDbContext : DbContext
                 .HasColumnName("created_at");
             entity.Property(e => e.Currency)
                 .HasMaxLength(3)
-                .HasDefaultValueSql("'USD'::character varying")
+                .HasDefaultValueSql("'GTQ'::character varying")
                 .HasColumnName("currency");
             entity.Property(e => e.IsActive)
                 .HasDefaultValue(true)
@@ -577,6 +595,11 @@ public partial class AcademicDbContext : DbContext
             entity.Property(e => e.Reason)
                 .HasMaxLength(500)
                 .HasColumnName("reason");
+            entity.Property(e => e.ReviewNotes)
+                .HasMaxLength(500)
+                .HasColumnName("review_notes");
+            entity.Property(e => e.ReviewedAt).HasColumnName("reviewed_at");
+            entity.Property(e => e.ReviewedByUserId).HasColumnName("reviewed_by_user_id");
             entity.Property(e => e.Status)
                 .HasMaxLength(30)
                 .HasColumnName("status");
@@ -591,6 +614,11 @@ public partial class AcademicDbContext : DbContext
                 .HasForeignKey(d => d.FromCampusId)
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("transfer_requests_from_campus_id_fkey");
+
+            entity.HasOne(d => d.ReviewedByUser).WithMany(p => p.TransferRequests)
+                .HasForeignKey(d => d.ReviewedByUserId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("transfer_requests_reviewed_by_user_id_fkey");
 
             entity.HasOne(d => d.Student).WithOne(p => p.TransferRequest)
                 .HasForeignKey<TransferRequest>(d => d.StudentId)

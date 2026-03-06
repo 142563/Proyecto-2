@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using Academic.Application.Abstractions;
 using Academic.Application.Common;
@@ -110,7 +112,7 @@ public sealed class AcademicOperationsService(
             .AsNoTracking()
             .Where(x => x.IsActive)
             .OrderBy(x => x.Name)
-            .Select(x => new CampusDto(x.Id, x.Code, x.Name, x.Address, x.IsActive))
+            .Select(x => new CampusDto(x.Id, x.Code, x.Name, x.Address, x.IsActive, x.CampusType, x.Region))
             .ToListAsync(cancellationToken);
 
         return Result<IReadOnlyList<CampusDto>>.Success(campuses);
@@ -142,6 +144,8 @@ public sealed class AcademicOperationsService(
 
     public async Task<Result<TransferCreateResultDto>> CreateTransferAsync(Guid studentId, CreateTransferDto request, CancellationToken cancellationToken)
     {
+        await ReconcileExpiredPendingAsync(studentId, cancellationToken);
+
         var student = await _dbContext.Students
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == studentId, cancellationToken);
@@ -181,11 +185,14 @@ public sealed class AcademicOperationsService(
             return Result<TransferCreateResultDto>.Failure("business_rule", "No available slots for selected campus/shift.");
         }
 
-        var transferPrice = await GetServicePriceAsync("Transfer", student.ProgramId, cancellationToken);
-        if (transferPrice <= 0)
+        var transferPricing = await GetServicePricingAsync("Transfer", student.ProgramId, cancellationToken);
+        if (transferPricing is null || transferPricing.Amount <= 0)
         {
             return Result<TransferCreateResultDto>.Failure("config_error", "Transfer pricing is not configured.");
         }
+
+        var now = DateTime.UtcNow;
+        var expiresAt = now.AddHours(_academicOptions.PendingPaymentExpirationHours);
 
         var transfer = new TransferRequest
         {
@@ -196,8 +203,8 @@ public sealed class AcademicOperationsService(
             ToShiftId = availability.ShiftId,
             Reason = request.Reason,
             Status = DomainStatuses.Transfer.PendingPayment,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            CreatedAt = now,
+            UpdatedAt = now
         };
 
         var payment = new PaymentOrder
@@ -206,10 +213,12 @@ public sealed class AcademicOperationsService(
             StudentId = studentId,
             OrderType = "Transfer",
             ReferenceId = transfer.Id,
-            Amount = transferPrice,
+            Amount = transferPricing.Amount,
+            Currency = transferPricing.Currency,
             Status = DomainStatuses.Payment.Pending,
             Description = $"Pago de solicitud de traslado - Campus {request.CampusId} / {shiftName}",
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = now,
+            ExpiresAt = expiresAt
         };
 
         _dbContext.TransferRequests.Add(transfer);
@@ -221,16 +230,18 @@ public sealed class AcademicOperationsService(
             "TransferCreated",
             "TransferRequest",
             transfer.Id.ToString(),
-            new { transfer.ToCampusId, transfer.ToShiftId, payment.Amount },
+            new { transfer.ToCampusId, transfer.ToShiftId, payment.Amount, payment.Currency, payment.ExpiresAt },
             null,
             cancellationToken);
 
         return Result<TransferCreateResultDto>.Success(
-            new TransferCreateResultDto(transfer.Id, payment.Id, payment.Amount, transfer.Status));
+            new TransferCreateResultDto(transfer.Id, payment.Id, payment.Amount, payment.Currency, payment.ExpiresAt, transfer.Status));
     }
 
     public async Task<Result<IReadOnlyList<TransferDto>>> GetMyTransfersAsync(Guid studentId, CancellationToken cancellationToken)
     {
+        await ReconcileExpiredPendingAsync(studentId, cancellationToken);
+
         var transfers = await _dbContext.TransferRequests
             .AsNoTracking()
             .Where(x => x.StudentId == studentId)
@@ -251,6 +262,148 @@ public sealed class AcademicOperationsService(
             .ToListAsync(cancellationToken);
 
         return Result<IReadOnlyList<TransferDto>>.Success(transfers);
+    }
+
+    public async Task<Result<TransferCancellationDto>> CancelTransferAsync(Guid studentId, Guid transferId, CancellationToken cancellationToken)
+    {
+        var transfer = await _dbContext.TransferRequests
+            .FirstOrDefaultAsync(x => x.Id == transferId && x.StudentId == studentId, cancellationToken);
+
+        if (transfer is null)
+        {
+            return Result<TransferCancellationDto>.Failure("not_found", "Transfer request not found.");
+        }
+
+        if (transfer.Status != DomainStatuses.Transfer.PendingPayment)
+        {
+            return Result<TransferCancellationDto>.Failure("business_rule", "Only pending-payment transfers can be cancelled.");
+        }
+
+        var payment = await _dbContext.PaymentOrders
+            .FirstOrDefaultAsync(x => x.OrderType == "Transfer" && x.ReferenceId == transfer.Id, cancellationToken);
+
+        if (payment is not null && payment.Status == DomainStatuses.Payment.Pending)
+        {
+            payment.Status = DomainStatuses.Payment.Cancelled;
+            payment.CancelledAt = DateTime.UtcNow;
+        }
+
+        transfer.Status = DomainStatuses.Transfer.Cancelled;
+        transfer.UpdatedAt = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditLogService.LogAsync(
+            null,
+            "TransferCancelled",
+            "TransferRequest",
+            transfer.Id.ToString(),
+            new { transfer.StudentId },
+            null,
+            cancellationToken);
+
+        return Result<TransferCancellationDto>.Success(new TransferCancellationDto(transfer.Id, transfer.Status, transfer.UpdatedAt));
+    }
+
+    public async Task<Result<TransferReviewResultDto>> ReviewTransferAsync(Guid adminUserId, Guid transferId, ReviewTransferDto request, CancellationToken cancellationToken)
+    {
+        var transfer = await _dbContext.TransferRequests
+            .Include(x => x.Student)
+            .FirstOrDefaultAsync(x => x.Id == transferId, cancellationToken);
+
+        if (transfer is null)
+        {
+            return Result<TransferReviewResultDto>.Failure("not_found", "Transfer request not found.");
+        }
+
+        if (transfer.Status != DomainStatuses.Transfer.PendingReview)
+        {
+            return Result<TransferReviewResultDto>.Failure("business_rule", "Only transfers pending review can be reviewed.");
+        }
+
+        var payment = await _dbContext.PaymentOrders
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.OrderType == "Transfer" && x.ReferenceId == transfer.Id, cancellationToken);
+
+        if (payment is null || payment.Status != DomainStatuses.Payment.Paid)
+        {
+            return Result<TransferReviewResultDto>.Failure("business_rule", "Transfer must have a paid order before review.");
+        }
+
+        var normalizedDecision = request.Decision.Trim().ToLowerInvariant();
+        if (normalizedDecision is not ("approved" or "rejected"))
+        {
+            return Result<TransferReviewResultDto>.ValidationFailure(new Dictionary<string, string[]>
+            {
+                ["decision"] = ["Decision must be Approved or Rejected."]
+            });
+        }
+
+        if (normalizedDecision == "approved")
+        {
+            var destinationCapacity = await _dbContext.CampusShiftCapacities
+                .FirstOrDefaultAsync(x => x.CampusId == transfer.ToCampusId && x.ShiftId == transfer.ToShiftId, cancellationToken);
+
+            if (destinationCapacity is null)
+            {
+                return Result<TransferReviewResultDto>.Failure("not_found", "Destination capacity record not found.");
+            }
+
+            if (destinationCapacity.OccupiedCapacity >= destinationCapacity.TotalCapacity)
+            {
+                return Result<TransferReviewResultDto>.Failure("business_rule", "Destination campus/shift has no available capacity.");
+            }
+
+            destinationCapacity.OccupiedCapacity += 1;
+            destinationCapacity.UpdatedAt = DateTime.UtcNow;
+
+            if (transfer.Student.CurrentCampusId.HasValue && transfer.Student.CurrentShiftId.HasValue)
+            {
+                var originCapacity = await _dbContext.CampusShiftCapacities
+                    .FirstOrDefaultAsync(x =>
+                        x.CampusId == transfer.Student.CurrentCampusId.Value &&
+                        x.ShiftId == transfer.Student.CurrentShiftId.Value,
+                        cancellationToken);
+
+                if (originCapacity is not null && originCapacity.OccupiedCapacity > 0)
+                {
+                    originCapacity.OccupiedCapacity -= 1;
+                    originCapacity.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+
+            transfer.Student.CurrentCampusId = transfer.ToCampusId;
+            transfer.Student.CurrentShiftId = transfer.ToShiftId;
+            transfer.Student.UpdatedAt = DateTime.UtcNow;
+            transfer.Status = DomainStatuses.Transfer.Approved;
+        }
+        else
+        {
+            transfer.Status = DomainStatuses.Transfer.Rejected;
+        }
+
+        transfer.ReviewedByUserId = adminUserId;
+        transfer.ReviewedAt = DateTime.UtcNow;
+        transfer.ReviewNotes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
+        transfer.UpdatedAt = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditLogService.LogAsync(
+            adminUserId,
+            "TransferReviewed",
+            "TransferRequest",
+            transfer.Id.ToString(),
+            new { transfer.Status, transfer.ReviewNotes },
+            null,
+            cancellationToken);
+
+        return Result<TransferReviewResultDto>.Success(new TransferReviewResultDto(
+            transfer.Id,
+            transfer.Status,
+            transfer.ReviewedByUserId,
+            transfer.ReviewedAt,
+            transfer.ReviewNotes));
     }
 
     public async Task<Result<IReadOnlyList<CourseDto>>> GetPensumAsync(Guid studentId, CancellationToken cancellationToken)
@@ -297,8 +450,44 @@ public sealed class AcademicOperationsService(
         return Result<IReadOnlyList<OverdueCourseDto>>.Success(overdueCourses);
     }
 
+    public async Task<Result<IReadOnlyList<EnrollmentSummaryDto>>> GetMyEnrollmentsAsync(Guid studentId, CancellationToken cancellationToken)
+    {
+        await ReconcileExpiredPendingAsync(studentId, cancellationToken);
+
+        var enrollments = await _dbContext.Enrollments
+            .AsNoTracking()
+            .Where(x => x.StudentId == studentId)
+            .OrderByDescending(x => x.CreatedAt)
+            .Select(x => new EnrollmentSummaryDto(
+                x.Id,
+                x.EnrollmentType,
+                x.Status,
+                x.TotalAmount,
+                _dbContext.PaymentOrders
+                    .Where(po => po.OrderType == "Enrollment" && po.ReferenceId == x.Id)
+                    .OrderByDescending(po => po.CreatedAt)
+                    .Select(po => po.Currency)
+                    .FirstOrDefault() ?? _academicOptions.DefaultCurrency,
+                _dbContext.PaymentOrders
+                    .Where(po => po.OrderType == "Enrollment" && po.ReferenceId == x.Id)
+                    .OrderByDescending(po => po.CreatedAt)
+                    .Select(po => po.Id)
+                    .FirstOrDefault(),
+                _dbContext.PaymentOrders
+                    .Where(po => po.OrderType == "Enrollment" && po.ReferenceId == x.Id)
+                    .OrderByDescending(po => po.CreatedAt)
+                    .Select(po => po.ExpiresAt)
+                    .FirstOrDefault(),
+                x.CreatedAt))
+            .ToListAsync(cancellationToken);
+
+        return Result<IReadOnlyList<EnrollmentSummaryDto>>.Success(enrollments);
+    }
+
     public async Task<Result<EnrollmentResultDto>> CreateEnrollmentAsync(Guid studentId, CreateEnrollmentDto request, CancellationToken cancellationToken)
     {
+        await ReconcileExpiredPendingAsync(studentId, cancellationToken);
+
         var uniqueIds = request.CourseIds.Where(x => x > 0).Distinct().ToList();
         if (uniqueIds.Count == 0)
         {
@@ -373,8 +562,19 @@ public sealed class AcademicOperationsService(
 
         var overdueIds = await GetOverdueIdsAsync(studentId, cancellationToken);
 
-        var courseExtraPrice = await GetServicePriceAsync("CourseExtra", student.ProgramId, cancellationToken);
-        var courseOverduePrice = await GetServicePriceAsync("CourseOverdue", student.ProgramId, cancellationToken);
+        var courseExtraPricing = await GetServicePricingAsync("CourseExtra", student.ProgramId, cancellationToken);
+        var courseOverduePricing = await GetServicePricingAsync("CourseOverdue", student.ProgramId, cancellationToken);
+
+        if (courseExtraPricing is null || courseOverduePricing is null ||
+            courseExtraPricing.Amount <= 0 || courseOverduePricing.Amount <= 0)
+        {
+            return Result<EnrollmentResultDto>.Failure("config_error", "Enrollment pricing is not configured.");
+        }
+
+        if (!string.Equals(courseExtraPricing.Currency, courseOverduePricing.Currency, StringComparison.OrdinalIgnoreCase))
+        {
+            return Result<EnrollmentResultDto>.Failure("config_error", "Pricing currency mismatch between extra and overdue courses.");
+        }
 
         var totalAmount = 0m;
         var hasOverdue = false;
@@ -383,7 +583,7 @@ public sealed class AcademicOperationsService(
         foreach (var courseId in uniqueIds)
         {
             var isOverdue = overdueIds.Contains(courseId);
-            totalAmount += isOverdue ? courseOverduePrice : courseExtraPrice;
+            totalAmount += isOverdue ? courseOverduePricing.Amount : courseExtraPricing.Amount;
             hasOverdue |= isOverdue;
             hasExtra |= !isOverdue;
         }
@@ -392,6 +592,9 @@ public sealed class AcademicOperationsService(
             ? "Mixed"
             : hasOverdue ? "Overdue" : "Extra";
 
+        var now = DateTime.UtcNow;
+        var expiresAt = now.AddHours(_academicOptions.PendingPaymentExpirationHours);
+
         var enrollment = new Enrollment
         {
             Id = Guid.NewGuid(),
@@ -399,8 +602,8 @@ public sealed class AcademicOperationsService(
             EnrollmentType = enrollmentType,
             Status = DomainStatuses.Enrollment.PendingPayment,
             TotalAmount = totalAmount,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            CreatedAt = now,
+            UpdatedAt = now
         };
 
         var payment = new PaymentOrder
@@ -410,9 +613,11 @@ public sealed class AcademicOperationsService(
             OrderType = "Enrollment",
             ReferenceId = enrollment.Id,
             Amount = totalAmount,
+            Currency = courseExtraPricing.Currency,
             Status = DomainStatuses.Payment.Pending,
             Description = "Pago de asignacion de cursos",
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = now,
+            ExpiresAt = expiresAt
         };
 
         _dbContext.Enrollments.Add(enrollment);
@@ -435,16 +640,66 @@ public sealed class AcademicOperationsService(
             "EnrollmentCreated",
             "Enrollment",
             enrollment.Id.ToString(),
-            new { enrollment.EnrollmentType, enrollment.TotalAmount, courses = uniqueIds },
+            new
+            {
+                enrollment.EnrollmentType,
+                enrollment.TotalAmount,
+                payment.Currency,
+                payment.ExpiresAt,
+                courses = uniqueIds
+            },
             null,
             cancellationToken);
 
         return Result<EnrollmentResultDto>.Success(
-            new EnrollmentResultDto(enrollment.Id, payment.Id, totalAmount, enrollment.Status));
+            new EnrollmentResultDto(enrollment.Id, payment.Id, totalAmount, payment.Currency, payment.ExpiresAt, enrollment.Status));
+    }
+
+    public async Task<Result<EnrollmentCancellationDto>> CancelEnrollmentAsync(Guid studentId, Guid enrollmentId, CancellationToken cancellationToken)
+    {
+        var enrollment = await _dbContext.Enrollments
+            .FirstOrDefaultAsync(x => x.Id == enrollmentId && x.StudentId == studentId, cancellationToken);
+
+        if (enrollment is null)
+        {
+            return Result<EnrollmentCancellationDto>.Failure("not_found", "Enrollment request not found.");
+        }
+
+        if (enrollment.Status != DomainStatuses.Enrollment.PendingPayment)
+        {
+            return Result<EnrollmentCancellationDto>.Failure("business_rule", "Only pending-payment enrollments can be cancelled.");
+        }
+
+        var payment = await _dbContext.PaymentOrders
+            .FirstOrDefaultAsync(x => x.OrderType == "Enrollment" && x.ReferenceId == enrollment.Id, cancellationToken);
+
+        if (payment is not null && payment.Status == DomainStatuses.Payment.Pending)
+        {
+            payment.Status = DomainStatuses.Payment.Cancelled;
+            payment.CancelledAt = DateTime.UtcNow;
+        }
+
+        enrollment.Status = DomainStatuses.Enrollment.Cancelled;
+        enrollment.UpdatedAt = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditLogService.LogAsync(
+            null,
+            "EnrollmentCancelled",
+            "Enrollment",
+            enrollment.Id.ToString(),
+            new { enrollment.StudentId },
+            null,
+            cancellationToken);
+
+        return Result<EnrollmentCancellationDto>.Success(new EnrollmentCancellationDto(enrollment.Id, enrollment.Status, enrollment.UpdatedAt));
     }
 
     public async Task<Result<IReadOnlyList<PaymentOrderDto>>> GetMyPaymentsAsync(Guid studentId, CancellationToken cancellationToken)
     {
+        await ReconcileExpiredPendingAsync(studentId, cancellationToken);
+
         var payments = await _dbContext.PaymentOrders
             .AsNoTracking()
             .Where(x => x.StudentId == studentId)
@@ -454,10 +709,38 @@ public sealed class AcademicOperationsService(
                 x.OrderType,
                 x.ReferenceId,
                 x.Amount,
+                x.Currency,
                 x.Status,
                 x.Description,
                 x.CreatedAt,
-                x.PaidAt))
+                x.ExpiresAt,
+                x.PaidAt,
+                x.CancelledAt))
+            .ToListAsync(cancellationToken);
+
+        return Result<IReadOnlyList<PaymentOrderDto>>.Success(payments);
+    }
+
+    public async Task<Result<IReadOnlyList<PaymentOrderDto>>> GetPendingPaymentsAsync(CancellationToken cancellationToken)
+    {
+        await ReconcileExpiredPendingAsync(null, cancellationToken);
+
+        var payments = await _dbContext.PaymentOrders
+            .AsNoTracking()
+            .Where(x => x.Status == DomainStatuses.Payment.Pending)
+            .OrderBy(x => x.ExpiresAt)
+            .Select(x => new PaymentOrderDto(
+                x.Id,
+                x.OrderType,
+                x.ReferenceId,
+                x.Amount,
+                x.Currency,
+                x.Status,
+                x.Description,
+                x.CreatedAt,
+                x.ExpiresAt,
+                x.PaidAt,
+                x.CancelledAt))
             .ToListAsync(cancellationToken);
 
         return Result<IReadOnlyList<PaymentOrderDto>>.Success(payments);
@@ -473,9 +756,19 @@ public sealed class AcademicOperationsService(
             return Result<PaymentOrderDto>.Failure("not_found", "Payment order not found.");
         }
 
+        await ReconcileExpiredPendingAsync(payment.StudentId, cancellationToken);
+
         if (payment.Status != DomainStatuses.Payment.Pending)
         {
             return Result<PaymentOrderDto>.Failure("business_rule", "Only pending payments can be marked as paid.");
+        }
+
+        if (IsPaymentExpired(payment))
+        {
+            payment.Status = DomainStatuses.Payment.Cancelled;
+            payment.CancelledAt = DateTime.UtcNow;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return Result<PaymentOrderDto>.Failure("business_rule", "Payment order expired and was cancelled.");
         }
 
         payment.Status = DomainStatuses.Payment.Paid;
@@ -516,14 +809,19 @@ public sealed class AcademicOperationsService(
             payment.OrderType,
             payment.ReferenceId,
             payment.Amount,
+            payment.Currency,
             payment.Status,
             payment.Description,
             payment.CreatedAt,
-            payment.PaidAt));
+            payment.ExpiresAt,
+            payment.PaidAt,
+            payment.CancelledAt));
     }
 
     public async Task<Result<CertificateCreatedDto>> CreateAsync(Guid studentId, CreateCertificateDto request, CancellationToken cancellationToken)
     {
+        await ReconcileExpiredPendingAsync(studentId, cancellationToken);
+
         var student = await _dbContext.Students
             .Include(x => x.User)
             .FirstOrDefaultAsync(x => x.Id == studentId, cancellationToken);
@@ -543,12 +841,13 @@ public sealed class AcademicOperationsService(
             return Result<CertificateCreatedDto>.Failure("business_rule", "An active certificate request already exists.");
         }
 
-        var certificatePrice = await GetServicePriceAsync("Certificate", student.ProgramId, cancellationToken);
-        if (certificatePrice <= 0)
+        var certificatePricing = await GetServicePricingAsync("Certificate", student.ProgramId, cancellationToken);
+        if (certificatePricing is null || certificatePricing.Amount <= 0)
         {
             return Result<CertificateCreatedDto>.Failure("config_error", "Certificate pricing is not configured.");
         }
 
+        var now = DateTime.UtcNow;
         var certificateId = Guid.NewGuid();
         var paymentId = Guid.NewGuid();
         var verificationCode = GenerateVerificationCode();
@@ -559,10 +858,12 @@ public sealed class AcademicOperationsService(
             StudentId = studentId,
             OrderType = "Certificate",
             ReferenceId = certificateId,
-            Amount = certificatePrice,
+            Amount = certificatePricing.Amount,
+            Currency = certificatePricing.Currency,
             Status = DomainStatuses.Payment.Pending,
             Description = "Pago certificacion digital",
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = now,
+            ExpiresAt = now.AddHours(_academicOptions.PendingPaymentExpirationHours)
         };
 
         var certificate = new Certificate
@@ -573,7 +874,7 @@ public sealed class AcademicOperationsService(
             Purpose = request.Purpose.Trim(),
             Status = DomainStatuses.Certificate.Requested,
             VerificationCode = verificationCode,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = now,
             Metadata = JsonSerializer.Serialize(new { source = "api", requestedBy = student.User.Email })
         };
 
@@ -586,7 +887,7 @@ public sealed class AcademicOperationsService(
             "CertificateRequested",
             "Certificate",
             certificate.Id.ToString(),
-            new { certificate.Purpose, payment.Amount },
+            new { certificate.Purpose, payment.Amount, payment.Currency, payment.ExpiresAt },
             null,
             cancellationToken);
 
@@ -594,12 +895,16 @@ public sealed class AcademicOperationsService(
             certificate.Id,
             payment.Id,
             payment.Amount,
+            payment.Currency,
+            payment.ExpiresAt,
             certificate.Status,
             certificate.VerificationCode));
     }
 
     public async Task<Result<CertificateDto>> GenerateAsync(Guid actorStudentId, Guid certificateId, GenerateCertificateDto request, CancellationToken cancellationToken)
     {
+        await ReconcileExpiredPendingAsync(actorStudentId, cancellationToken);
+
         var certificate = await _dbContext.Certificates
             .Include(x => x.PaymentOrder)
             .Include(x => x.Student)
@@ -687,6 +992,69 @@ public sealed class AcademicOperationsService(
             certificate.CreatedAt,
             certificate.GeneratedAt,
             certificate.SentAt));
+    }
+
+    public async Task<Result<IReadOnlyList<CertificateSummaryDto>>> GetMyCertificatesAsync(Guid studentId, CancellationToken cancellationToken)
+    {
+        await ReconcileExpiredPendingAsync(studentId, cancellationToken);
+
+        var rows = await _dbContext.Certificates
+            .AsNoTracking()
+            .Include(x => x.PaymentOrder)
+            .Where(x => x.StudentId == studentId)
+            .OrderByDescending(x => x.CreatedAt)
+            .Select(x => new CertificateSummaryDto(
+                x.Id,
+                x.Purpose,
+                x.Status,
+                x.VerificationCode,
+                x.PaymentOrderId,
+                x.PaymentOrder.Amount,
+                x.PaymentOrder.Currency,
+                x.PaymentOrder.ExpiresAt,
+                x.CreatedAt,
+                x.GeneratedAt,
+                x.SentAt))
+            .ToListAsync(cancellationToken);
+
+        return Result<IReadOnlyList<CertificateSummaryDto>>.Success(rows);
+    }
+
+    public async Task<Result<CertificateCancellationDto>> CancelAsync(Guid studentId, Guid certificateId, CancellationToken cancellationToken)
+    {
+        var certificate = await _dbContext.Certificates
+            .Include(x => x.PaymentOrder)
+            .FirstOrDefaultAsync(x => x.Id == certificateId && x.StudentId == studentId, cancellationToken);
+
+        if (certificate is null)
+        {
+            return Result<CertificateCancellationDto>.Failure("not_found", "Certificate request not found.");
+        }
+
+        if (certificate.Status != DomainStatuses.Certificate.Requested)
+        {
+            return Result<CertificateCancellationDto>.Failure("business_rule", "Only requested certificates can be cancelled.");
+        }
+
+        if (certificate.PaymentOrder.Status == DomainStatuses.Payment.Pending)
+        {
+            certificate.PaymentOrder.Status = DomainStatuses.Payment.Cancelled;
+            certificate.PaymentOrder.CancelledAt = DateTime.UtcNow;
+        }
+
+        certificate.Status = DomainStatuses.Certificate.Cancelled;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditLogService.LogAsync(
+            null,
+            "CertificateCancelled",
+            "Certificate",
+            certificate.Id.ToString(),
+            new { certificate.StudentId },
+            null,
+            cancellationToken);
+
+        return Result<CertificateCancellationDto>.Success(new CertificateCancellationDto(certificate.Id, certificate.Status));
     }
 
     public async Task<Result<FilePayloadDto>> DownloadAsync(Guid actorStudentId, Guid certificateId, CancellationToken cancellationToken)
@@ -930,42 +1298,162 @@ public sealed class AcademicOperationsService(
         return failed.ToHashSet();
     }
 
-    private async Task<decimal> GetServicePriceAsync(string serviceType, int? programId, CancellationToken cancellationToken)
+    private async Task<ServicePricing?> GetServicePricingAsync(string serviceType, int? programId, CancellationToken cancellationToken)
     {
         var price = await _dbContext.PricingCatalogs
             .AsNoTracking()
             .Where(x => x.ServiceType == serviceType && x.IsActive && x.ProgramId == programId)
             .OrderByDescending(x => x.CreatedAt)
-            .Select(x => (decimal?)x.Amount)
+            .Select(x => new ServicePricing(x.Amount, x.Currency))
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (price.HasValue)
+        if (price is not null)
         {
-            return price.Value;
+            return price;
         }
 
-        var fallback = await _dbContext.PricingCatalogs
+        return await _dbContext.PricingCatalogs
             .AsNoTracking()
             .Where(x => x.ServiceType == serviceType && x.IsActive && x.ProgramId == null)
             .OrderByDescending(x => x.CreatedAt)
-            .Select(x => (decimal?)x.Amount)
+            .Select(x => new ServicePricing(x.Amount, x.Currency))
             .FirstOrDefaultAsync(cancellationToken);
-
-        return fallback ?? 0m;
     }
+
+    private async Task<int> ReconcileExpiredPendingAsync(Guid? studentId, CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+        var createdCutoff = now.AddHours(-_academicOptions.PendingPaymentExpirationHours);
+
+        var query = _dbContext.PaymentOrders.Where(x =>
+            x.Status == DomainStatuses.Payment.Pending &&
+            (x.ExpiresAt <= now ||
+             x.CreatedAt <= createdCutoff));
+
+        if (studentId.HasValue)
+        {
+            query = query.Where(x => x.StudentId == studentId.Value);
+        }
+
+        var expiredPayments = await query.ToListAsync(cancellationToken);
+        if (expiredPayments.Count == 0)
+        {
+            return 0;
+        }
+
+        foreach (var payment in expiredPayments)
+        {
+            var expectedExpiry = payment.CreatedAt.AddHours(_academicOptions.PendingPaymentExpirationHours);
+            if (payment.ExpiresAt > expectedExpiry)
+            {
+                payment.ExpiresAt = expectedExpiry;
+            }
+
+            payment.Status = DomainStatuses.Payment.Cancelled;
+            payment.CancelledAt = now;
+        }
+
+        var transferIds = expiredPayments
+            .Where(x => x.OrderType == "Transfer")
+            .Select(x => x.ReferenceId)
+            .Distinct()
+            .ToList();
+
+        var enrollmentIds = expiredPayments
+            .Where(x => x.OrderType == "Enrollment")
+            .Select(x => x.ReferenceId)
+            .Distinct()
+            .ToList();
+
+        var certificateIds = expiredPayments
+            .Where(x => x.OrderType == "Certificate")
+            .Select(x => x.ReferenceId)
+            .Distinct()
+            .ToList();
+
+        if (transferIds.Count > 0)
+        {
+            var transfers = await _dbContext.TransferRequests
+                .Where(x => transferIds.Contains(x.Id) &&
+                            (x.Status == DomainStatuses.Transfer.PendingPayment || x.Status == DomainStatuses.Transfer.PendingReview))
+                .ToListAsync(cancellationToken);
+
+            foreach (var transfer in transfers)
+            {
+                transfer.Status = DomainStatuses.Transfer.Cancelled;
+                transfer.UpdatedAt = now;
+                transfer.ReviewNotes = string.IsNullOrWhiteSpace(transfer.ReviewNotes)
+                    ? "Auto-cancelled due to expired payment."
+                    : transfer.ReviewNotes + " | Auto-cancelled due to expired payment.";
+            }
+        }
+
+        if (enrollmentIds.Count > 0)
+        {
+            var enrollments = await _dbContext.Enrollments
+                .Where(x => enrollmentIds.Contains(x.Id) && x.Status == DomainStatuses.Enrollment.PendingPayment)
+                .ToListAsync(cancellationToken);
+
+            foreach (var enrollment in enrollments)
+            {
+                enrollment.Status = DomainStatuses.Enrollment.Cancelled;
+                enrollment.UpdatedAt = now;
+            }
+        }
+
+        if (certificateIds.Count > 0)
+        {
+            var certificates = await _dbContext.Certificates
+                .Where(x => certificateIds.Contains(x.Id) &&
+                            (x.Status == DomainStatuses.Certificate.Requested || x.Status == DomainStatuses.Certificate.PdfGenerated))
+                .ToListAsync(cancellationToken);
+
+            foreach (var certificate in certificates)
+            {
+                certificate.Status = DomainStatuses.Certificate.Cancelled;
+            }
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditLogService.LogAsync(
+            null,
+            "ExpiredPendingReconciled",
+            "PaymentOrder",
+            studentId?.ToString() ?? "all",
+            new { Count = expiredPayments.Count },
+            null,
+            cancellationToken);
+
+        return expiredPayments.Count;
+    }
+
+    private static bool IsPaymentExpired(PaymentOrder payment)
+        => payment.ExpiresAt <= DateTime.UtcNow;
 
     private static string NormalizeShift(string value)
     {
-        var normalized = value.Trim().ToLowerInvariant();
+        var normalized = RemoveDiacritics(value).Trim().ToLowerInvariant();
         return normalized switch
         {
             "saturday" => "Saturday",
             "sabado" => "Saturday",
-            "s�bado" => "Saturday",
             "sunday" => "Sunday",
             "domingo" => "Sunday",
             _ => value.Trim()
         };
+    }
+
+    private static string RemoveDiacritics(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return input;
+        }
+
+        var normalized = input.Normalize(NormalizationForm.FormD);
+        var chars = normalized.Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark).ToArray();
+        return new string(chars).Normalize(NormalizationForm.FormC);
     }
 
     private static string GenerateVerificationCode()
@@ -973,4 +1461,6 @@ public sealed class AcademicOperationsService(
         var random = Convert.ToHexString(Guid.NewGuid().ToByteArray())[..12];
         return $"CERT-{DateTime.UtcNow:yyyyMMdd}-{random}";
     }
+
+    private sealed record ServicePricing(decimal Amount, string Currency);
 }
