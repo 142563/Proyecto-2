@@ -29,7 +29,7 @@ import { StatusBadgeComponent } from '../../shared/components/status-badge.compo
           <label class="text-xs font-semibold uppercase tracking-wide text-[color:var(--umg-navy-700)]">Selecciona ciclo</label>
           <div class="mt-2 flex flex-wrap gap-2">
             <button
-              *ngFor="let cycle of cycleOrder"
+              *ngFor="let cycle of cycleOrder; trackBy: trackByCycle"
               type="button"
               class="rounded-full border px-3 py-1 text-sm transition"
               [ngClass]="selectedCycle === cycle ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 text-slate-700'"
@@ -41,7 +41,7 @@ import { StatusBadgeComponent } from '../../shared/components/status-badge.compo
         </div>
 
         <div class="mt-4 space-y-2">
-          <label *ngFor="let course of visibleCourses" class="block rounded-lg border border-slate-200 p-3">
+          <label *ngFor="let course of visibleCourses; trackBy: trackByCourseId" class="block rounded-lg border border-slate-200 p-3">
             <div class="flex items-start justify-between gap-3">
               <div>
                 <span class="font-semibold text-slate-800">{{ course.code }} - {{ course.name }}</span>
@@ -51,8 +51,14 @@ import { StatusBadgeComponent } from '../../shared/components/status-badge.compo
                 </p>
                 <p class="mt-1 text-xs text-muted">Prerrequisitos: {{ course.prerequisiteSummary }}</p>
                 <span *ngIf="course.isOverdue" class="mt-2 inline-block rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700">Atrasado</span>
+                <span *ngIf="course.isApproved" class="mt-2 ml-2 inline-block rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">Aprobado</span>
               </div>
-              <input type="checkbox" [checked]="isSelected(course.id)" (change)="toggleCourse(course.id)" />
+              <input
+                type="checkbox"
+                [checked]="isSelected(course.id)"
+                [disabled]="!isSelectableCourse(course)"
+                (change)="toggleCourse(course.id)"
+              />
             </div>
 
             <div *ngIf="isSelected(course.id)" class="mt-3 rounded-md bg-slate-50 p-2">
@@ -88,7 +94,7 @@ import { StatusBadgeComponent } from '../../shared/components/status-badge.compo
         <section class="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
           <h3 class="text-sm font-bold uppercase tracking-wide text-[color:var(--umg-navy-700)]">Resumen de carga</h3>
           <p class="mt-2 text-sm text-slate-700">Plan principal: {{ shiftLabel(primaryShift) }}</p>
-          <p class="mt-1 text-sm text-slate-700">Total seleccionados: {{ selectedTotal }} / 6</p>
+          <p class="mt-1 text-sm text-slate-700">Total seleccionados: {{ selectedTotal }} / {{ maxCourses }}</p>
           <p class="mt-1 text-sm text-slate-700">Sábado: {{ saturdayCount }} · Domingo: {{ sundayCount }}</p>
           <p class="mt-2 text-sm" [class.text-emerald-700]="isDistributionValid" [class.text-rose-700]="!isDistributionValid">
             {{ distributionMessage }}
@@ -115,7 +121,7 @@ import { StatusBadgeComponent } from '../../shared/components/status-badge.compo
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let item of enrollments" class="border-b border-slate-100">
+            <tr *ngFor="let item of enrollments; trackBy: trackByEnrollmentId" class="border-b border-slate-100">
               <td class="py-2">{{ item.createdAt | date:'short' }}</td>
               <td>{{ item.enrollmentType }}</td>
               <td>Q{{ item.totalAmount | number:'1.2-2' }} {{ item.currency }}</td>
@@ -140,11 +146,13 @@ import { StatusBadgeComponent } from '../../shared/components/status-badge.compo
 export class CoursesPage {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = API_BASE_URL;
+  readonly maxCourses = 6;
 
   courses: CourseDto[] = [];
   coursesByCycle = new Map<number, CourseDto[]>();
   cycleOrder: number[] = [];
   selectedCycle: number | null = null;
+  preferredCycle: number | null = null;
   visibleCourses: CourseDto[] = [];
   overdue: OverdueCourseDto[] = [];
   enrollments: EnrollmentSummaryResponse[] = [];
@@ -177,7 +185,7 @@ export class CoursesPage {
       return true;
     }
 
-    if (this.selectedTotal > 6) {
+    if (this.selectedTotal > this.maxCourses) {
       return false;
     }
 
@@ -193,8 +201,8 @@ export class CoursesPage {
       return 'Selecciona cursos para validar la distribución.';
     }
 
-    if (this.selectedTotal > 6) {
-      return 'Exceso de carga: máximo 6 cursos por solicitud.';
+    if (this.selectedTotal > this.maxCourses) {
+      return `Exceso de carga: máximo ${this.maxCourses} cursos por solicitud.`;
     }
 
     if (this.isDistributionValid) {
@@ -213,7 +221,8 @@ export class CoursesPage {
       }
 
       this.primaryShift = this.normalizeShift(response.data.shiftName);
-      this.realignSelectionByPrimaryShift();
+      this.preferredCycle = this.normalizeCycle(response.data.currentCycle);
+      this.applyPreferredCycle();
     });
   }
 
@@ -250,11 +259,27 @@ export class CoursesPage {
   }
 
   toggleCourse(courseId: number): void {
+    const course = this.courses.find((item) => item.id === courseId);
+    if (!course) {
+      return;
+    }
+
+    if (!this.isSelectableCourse(course)) {
+      this.error = this.nonSelectableReason(course);
+      return;
+    }
+
     if (this.selectedCourseShifts.has(courseId)) {
       this.selectedCourseShifts.delete(courseId);
       return;
     }
 
+    if (this.selectedCourseShifts.size >= this.maxCourses) {
+      this.error = `No puedes seleccionar más de ${this.maxCourses} cursos.`;
+      return;
+    }
+
+    this.error = '';
     this.selectedCourseShifts.set(courseId, this.primaryShift);
   }
 
@@ -273,6 +298,11 @@ export class CoursesPage {
   createEnrollment(): void {
     this.message = '';
     this.error = '';
+
+    if (!this.isDistributionValid) {
+      this.error = this.distributionMessage;
+      return;
+    }
 
     const payload: CreateEnrollmentRequest = {
       courseSelections: Array.from(this.selectedCourseShifts.entries()).map(([courseId, shift]) => ({ courseId, shift }))
@@ -332,7 +362,23 @@ export class CoursesPage {
       this.selectedCycle = this.cycleOrder[0] ?? null;
     }
 
+    this.applyPreferredCycle();
     this.pruneSelection();
+    this.refreshVisibleCourses();
+  }
+
+  private applyPreferredCycle(): void {
+    if (this.preferredCycle === null || this.cycleOrder.length === 0) {
+      return;
+    }
+
+    if (this.cycleOrder.includes(this.preferredCycle)) {
+      this.selectedCycle = this.preferredCycle;
+    } else {
+      this.selectedCycle = this.cycleOrder[this.cycleOrder.length - 1] ?? this.selectedCycle;
+    }
+
+    this.preferredCycle = null;
     this.refreshVisibleCourses();
   }
 
@@ -352,14 +398,28 @@ export class CoursesPage {
       .forEach((courseId) => this.selectedCourseShifts.delete(courseId));
   }
 
-  private realignSelectionByPrimaryShift(): void {
-    if (this.selectedCourseShifts.size === 0) {
-      return;
+  trackByCycle(_: number, cycle: number): number {
+    return cycle;
+  }
+
+  trackByCourseId(_: number, course: CourseDto): number {
+    return course.id;
+  }
+
+  trackByEnrollmentId(_: number, enrollment: EnrollmentSummaryResponse): string {
+    return enrollment.enrollmentId;
+  }
+
+  isSelectableCourse(course: CourseDto): boolean {
+    if (course.isApproved) {
+      return false;
     }
 
-    Array.from(this.selectedCourseShifts.entries())
-      .filter(([, shift]) => shift !== 'Saturday' && shift !== 'Sunday')
-      .forEach(([courseId]) => this.selectedCourseShifts.set(courseId, this.primaryShift));
+    if (this.overdue.length > 0 && !course.isOverdue) {
+      return false;
+    }
+
+    return true;
   }
 
   private normalizeShift(shift: string | undefined | null): ShiftName {
@@ -369,6 +429,35 @@ export class CoursesPage {
     }
 
     return 'Saturday';
+  }
+
+  private normalizeCycle(cycle: number | undefined | null): number | null {
+    if (typeof cycle !== 'number' || Number.isNaN(cycle)) {
+      return null;
+    }
+
+    const normalized = Math.trunc(cycle);
+    if (normalized < 1) {
+      return 1;
+    }
+
+    if (normalized > 10) {
+      return 10;
+    }
+
+    return normalized;
+  }
+
+  private nonSelectableReason(course: CourseDto): string {
+    if (course.isApproved) {
+      return 'Este curso ya está aprobado.';
+    }
+
+    if (this.overdue.length > 0 && !course.isOverdue) {
+      return 'Tienes cursos atrasados pendientes. Solo puedes asignar cursos atrasados.';
+    }
+
+    return 'Este curso no puede asignarse en este momento.';
   }
 
   private extractErrorMessage(error: HttpErrorResponse): string {

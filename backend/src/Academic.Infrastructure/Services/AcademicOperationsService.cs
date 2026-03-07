@@ -113,6 +113,7 @@ public sealed class AcademicOperationsService(
         string? programName = null;
         string? campusName = null;
         string? shiftName = null;
+        short? currentCycle = null;
 
         if (user.Student is not null)
         {
@@ -142,6 +143,19 @@ public sealed class AcademicOperationsService(
             programName ??= prefix.Program.Name;
             campusName ??= prefix.Campus.Name;
             shiftName ??= prefix.Shift.Name;
+
+            var maxPassedCycle = await _dbContext.StudentCourseHistories
+                .AsNoTracking()
+                .Where(x => x.StudentId == user.Student.Id && x.Status == "Passed")
+                .Join(_dbContext.Courses.AsNoTracking(),
+                    history => history.CourseId,
+                    course => course.Id,
+                    (_, course) => (short?)course.Cycle)
+                .MaxAsync(cancellationToken) ?? 0;
+
+            currentCycle = maxPassedCycle <= 0
+                ? (short)1
+                : (short)Math.Min(10, maxPassedCycle + 1);
         }
 
         return Result<MeDto>.Success(new MeDto(
@@ -154,7 +168,8 @@ public sealed class AcademicOperationsService(
             carnet,
             programName,
             campusName,
-            shiftName));
+            shiftName,
+            currentCycle));
     }
 
     public async Task<Result<IReadOnlyList<CampusDto>>> GetCampusesAsync(CancellationToken cancellationToken)
@@ -479,6 +494,13 @@ public sealed class AcademicOperationsService(
         }
 
         var overdueIds = await GetOverdueIdsAsync(studentId, cancellationToken);
+        var approvedCourseIds = await _dbContext.StudentCourseHistories
+            .AsNoTracking()
+            .Where(x => x.StudentId == studentId && EF.Functions.ILike(x.Status, "passed"))
+            .Select(x => x.CourseId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        var approvedCourseIdSet = approvedCourseIds.ToHashSet();
 
         var coursesRaw = await _dbContext.Courses
             .AsNoTracking()
@@ -512,6 +534,7 @@ public sealed class AcademicOperationsService(
                 x.HoursPerWeek,
                 x.HoursTotal,
                 x.IsLab,
+                approvedCourseIdSet.Contains(x.Id),
                 overdueIds.Contains(x.Id),
                 prerequisiteCodes.Count > 0 || prerequisiteCredits.Count > 0,
                 prerequisiteSummary);
@@ -613,17 +636,16 @@ public sealed class AcademicOperationsService(
 
         if (student is null)
         {
-            return Result<EnrollmentResultDto>.Failure("not_found", "Student profile not found.");
+            return Result<EnrollmentResultDto>.Failure("not_found", "No se encontró el perfil del estudiante.");
         }
 
         var shifts = await _dbContext.Shifts
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
-        var saturdayShift = shifts.FirstOrDefault(x => string.Equals(x.Name, "Saturday", StringComparison.OrdinalIgnoreCase));
-        var sundayShift = shifts.FirstOrDefault(x => string.Equals(x.Name, "Sunday", StringComparison.OrdinalIgnoreCase));
-
-        if (saturdayShift is null || sundayShift is null)
+        var shiftByName = shifts.ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
+        if (!shiftByName.TryGetValue("Saturday", out var saturdayShift) ||
+            !shiftByName.TryGetValue("Sunday", out var sundayShift))
         {
             return Result<EnrollmentResultDto>.Failure("config_error", "No existe configuración de jornadas (Saturday/Sunday).");
         }
@@ -632,8 +654,7 @@ public sealed class AcademicOperationsService(
         foreach (var selection in validSelections)
         {
             var normalizedShift = NormalizeShift(selection.Shift);
-            var shift = shifts.FirstOrDefault(x => string.Equals(x.Name, normalizedShift, StringComparison.OrdinalIgnoreCase));
-            if (shift is null)
+            if (!shiftByName.TryGetValue(normalizedShift, out var shift))
             {
                 return Result<EnrollmentResultDto>.ValidationFailure(new Dictionary<string, string[]>
                 {
@@ -666,7 +687,7 @@ public sealed class AcademicOperationsService(
 
         if (hasPendingEnrollment)
         {
-            return Result<EnrollmentResultDto>.Failure("business_rule", "You already have an active enrollment request.");
+            return Result<EnrollmentResultDto>.Failure("business_rule", "Ya tienes una solicitud de asignación activa.");
         }
 
         var selectedCourses = await _dbContext.Courses
@@ -677,7 +698,7 @@ public sealed class AcademicOperationsService(
 
         if (selectedCourses.Count != uniqueIds.Count)
         {
-            return Result<EnrollmentResultDto>.Failure("business_rule", "One or more selected courses are invalid for your program.");
+            return Result<EnrollmentResultDto>.Failure("business_rule", "Uno o más cursos seleccionados no son válidos para tu carrera.");
         }
 
         var confirmedEnrollmentCounts = await _dbContext.EnrollmentCourses
@@ -696,22 +717,24 @@ public sealed class AcademicOperationsService(
             countLookup.TryGetValue(course.Id, out var occupied);
             if (occupied >= _academicOptions.DefaultCourseCapacity)
             {
-                return Result<EnrollmentResultDto>.Failure("business_rule", $"No seats available for course {course.Code}.");
+                return Result<EnrollmentResultDto>.Failure("business_rule", $"No hay cupo disponible para el curso {course.Code}.");
             }
         }
 
-        var passedCourseIds = await _dbContext.StudentCourseHistories
-            .Where(x => x.StudentId == studentId && x.Status == "Passed")
-            .Select(x => x.CourseId)
+        var passedCourses = await _dbContext.StudentCourseHistories
+            .Where(x => x.StudentId == studentId && EF.Functions.ILike(x.Status, "passed"))
+            .Join(_dbContext.Courses.AsNoTracking(),
+                history => history.CourseId,
+                course => course.Id,
+                (history, course) => new { history.CourseId, course.Credits, course.Cycle })
             .Distinct()
             .ToListAsync(cancellationToken);
 
-        var passedCourseIdSet = passedCourseIds.ToHashSet();
-        var approvedCredits = await _dbContext.Courses
-            .Where(x => passedCourseIds.Contains(x.Id))
-            .SumAsync(x => (int?)x.Credits, cancellationToken) ?? 0;
-
-        var currentAcademicCycle = await InferCurrentCycleAsync(passedCourseIds, cancellationToken);
+        var passedCourseIdSet = passedCourses.Select(x => x.CourseId).ToHashSet();
+        var approvedCredits = passedCourses.Sum(x => (int)x.Credits);
+        var currentAcademicCycle = passedCourses.Count == 0
+            ? (short)1
+            : (short)Math.Min(10, passedCourses.Max(x => x.Cycle) + 1);
         var isEarlyCycleStudent = currentAcademicCycle <= 3;
 
         foreach (var course in selectedCourses)
@@ -741,6 +764,22 @@ public sealed class AcademicOperationsService(
         }
 
         var overdueIds = await GetOverdueIdsAsync(studentId, cancellationToken);
+        var approvedSelections = uniqueIds.Where(id => passedCourseIdSet.Contains(id)).ToList();
+        if (approvedSelections.Count > 0)
+        {
+            return Result<EnrollmentResultDto>.Failure("business_rule", "No puedes asignarte cursos que ya tienes aprobados.");
+        }
+
+        if (overdueIds.Count > 0)
+        {
+            var nonOverdueSelections = uniqueIds.Where(id => !overdueIds.Contains(id)).ToList();
+            if (nonOverdueSelections.Count > 0)
+            {
+                return Result<EnrollmentResultDto>.Failure(
+                    "business_rule",
+                    "Tienes cursos atrasados pendientes. Debes asignar primero únicamente tus cursos atrasados.");
+            }
+        }
 
         var courseExtraPricing = await GetServicePricingAsync("CourseExtra", student.ProgramId, cancellationToken);
         var courseOverduePricing = await GetServicePricingAsync("CourseOverdue", student.ProgramId, cancellationToken);
@@ -1464,13 +1503,13 @@ public sealed class AcademicOperationsService(
     private async Task<HashSet<int>> GetOverdueIdsAsync(Guid studentId, CancellationToken cancellationToken)
     {
         var failed = await _dbContext.StudentCourseHistories
-            .Where(x => x.StudentId == studentId && x.Status == "Failed")
+            .Where(x => x.StudentId == studentId && EF.Functions.ILike(x.Status, "failed"))
             .Select(x => x.CourseId)
             .Distinct()
             .ToListAsync(cancellationToken);
 
         var passed = await _dbContext.StudentCourseHistories
-            .Where(x => x.StudentId == studentId && x.Status == "Passed")
+            .Where(x => x.StudentId == studentId && EF.Functions.ILike(x.Status, "passed"))
             .Select(x => x.CourseId)
             .Distinct()
             .ToListAsync(cancellationToken);
@@ -1611,27 +1650,6 @@ public sealed class AcademicOperationsService(
 
     private static bool IsPaymentExpired(PaymentOrder payment)
         => payment.ExpiresAt <= DateTime.UtcNow;
-
-    private async Task<short> InferCurrentCycleAsync(IReadOnlyCollection<int> passedCourseIds, CancellationToken cancellationToken)
-    {
-        if (passedCourseIds.Count == 0)
-        {
-            return 1;
-        }
-
-        var maxPassedCycle = await _dbContext.Courses
-            .AsNoTracking()
-            .Where(x => passedCourseIds.Contains(x.Id))
-            .Select(x => (short?)x.Cycle)
-            .MaxAsync(cancellationToken) ?? 0;
-
-        if (maxPassedCycle <= 0)
-        {
-            return 1;
-        }
-
-        return (short)Math.Min(10, maxPassedCycle + 1);
-    }
 
     private static string BuildPrerequisiteSummary(IReadOnlyCollection<string> courseCodes, IReadOnlyCollection<short> creditRequirements)
     {

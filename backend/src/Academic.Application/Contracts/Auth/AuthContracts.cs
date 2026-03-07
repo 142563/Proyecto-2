@@ -23,5 +23,6 @@ public sealed record MeDto(
     string? Carnet,
     string? ProgramName,
     string? CampusName,
-    string? ShiftName);
+    string? ShiftName,
+    short? CurrentCycle);
 

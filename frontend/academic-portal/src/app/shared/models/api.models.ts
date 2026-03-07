@@ -25,6 +25,7 @@ export interface MeResponse {
   programName?: string;
   campusName?: string;
   shiftName?: string;
+  currentCycle?: number;
 }
 
 export interface CampusResponse {
@@ -104,6 +105,7 @@ export interface CourseDto {
   hoursPerWeek: number;
   hoursTotal: number;
   isLab: boolean;
+  isApproved: boolean;
   isOverdue: boolean;
   hasPrerequisites: boolean;
   prerequisiteSummary: string;

@@ -110,6 +110,47 @@ INSERT INTO user_roles (user_id, role_id) VALUES
 ('33333333-3333-3333-3333-333333333333', 2)
 ON CONFLICT (user_id, role_id) DO NOTHING;
 
+-- Reset transactional demo data to keep seed idempotent and avoid stale locks.
+DELETE FROM enrollment_courses
+WHERE enrollment_id IN (
+    SELECT id
+    FROM enrollments
+    WHERE student_id IN (
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1',
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2'
+    )
+);
+
+DELETE FROM certificates
+WHERE student_id IN (
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2'
+);
+
+DELETE FROM transfer_requests
+WHERE student_id IN (
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2'
+);
+
+DELETE FROM enrollments
+WHERE student_id IN (
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2'
+);
+
+DELETE FROM payment_orders
+WHERE student_id IN (
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2'
+);
+
+DELETE FROM audit_logs
+WHERE user_id IN (
+    '22222222-2222-2222-2222-222222222222',
+    '33333333-3333-3333-3333-333333333333'
+);
+
 -- Students
 INSERT INTO students (
     id, user_id, student_code, carnet, carnet_prefix, entry_year, carnet_sequence,
@@ -253,7 +294,8 @@ DELETE FROM student_course_history
 WHERE student_id IN ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2');
 
 INSERT INTO student_course_history (student_id, course_id, year, term, grade, status) VALUES
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 1, 2022, '2022-1', 82.00, 'Passed'),
+-- Ana (7mo ciclo con pendientes historicos)
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 1, 2022, '2022-1', 54.00, 'Failed'),
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 2, 2022, '2022-1', 85.00, 'Passed'),
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 3, 2022, '2022-1', 80.00, 'Passed'),
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 4, 2022, '2022-1', 88.00, 'Passed'),
@@ -274,7 +316,7 @@ INSERT INTO student_course_history (student_id, course_id, year, term, grade, st
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 19, 2023, '2023-2', 81.00, 'Passed'),
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 20, 2023, '2023-2', 80.00, 'Passed'),
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 21, 2024, '2024-1', 75.00, 'Passed'),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 22, 2024, '2024-1', 82.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 22, 2024, '2024-1', 56.00, 'Failed'),
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 23, 2024, '2024-1', 86.00, 'Passed'),
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 24, 2024, '2024-1', 78.00, 'Passed'),
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 25, 2024, '2024-1', 80.00, 'Passed'),
@@ -283,11 +325,7 @@ INSERT INTO student_course_history (student_id, course_id, year, term, grade, st
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 28, 2024, '2024-2', 77.00, 'Passed'),
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 29, 2024, '2024-2', 82.00, 'Passed'),
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 30, 2024, '2024-2', 78.00, 'Passed'),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 31, 2025, '2025-1', 58.00, 'Failed'),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 32, 2025, '2025-1', 76.00, 'Passed'),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 33, 2025, '2025-1', 55.00, 'Failed'),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 34, 2025, '2025-1', 79.00, 'Passed'),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 35, 2025, '2025-1', 80.00, 'Passed'),
+-- Carlos (al dia en 3er ciclo: ciclos 1 y 2 completos)
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 1, 2024, '2024-1', 78.00, 'Passed'),
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 2, 2024, '2024-1', 80.00, 'Passed'),
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 3, 2024, '2024-1', 76.00, 'Passed'),

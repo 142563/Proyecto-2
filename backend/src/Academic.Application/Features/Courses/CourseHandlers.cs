@@ -62,7 +62,7 @@ public sealed class CreateEnrollmentCommandHandler(ICourseService courseService,
     {
         if (!currentUser.StudentId.HasValue)
         {
-            return Task.FromResult(Result<EnrollmentResultDto>.Failure("forbidden", "Only students can create enrollments."));
+            return Task.FromResult(Result<EnrollmentResultDto>.Failure("forbidden", "Solo los estudiantes pueden crear asignaciones."));
         }
 
         if (request.Request.CourseSelections is null || request.Request.CourseSelections.Count == 0)

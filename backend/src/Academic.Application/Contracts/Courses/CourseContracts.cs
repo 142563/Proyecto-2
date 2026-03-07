@@ -9,6 +9,7 @@ public sealed record CourseDto(
     short HoursPerWeek,
     short HoursTotal,
     bool IsLab,
+    bool IsApproved,
     bool IsOverdue,
     bool HasPrerequisites,
     string PrerequisiteSummary);
