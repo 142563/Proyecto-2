@@ -40,7 +40,6 @@ services:
   - type: web
     name: miumg-web
     runtime: static
-    plan: free
     autoDeploy: true
     buildCommand: cd frontend/academic-portal && npm ci && node ./scripts/write-env.mjs && npm run build
     staticPublishPath: ./frontend/academic-portal/dist/academic-portal/browser
