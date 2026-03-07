@@ -116,7 +116,7 @@ INSERT INTO students (
     institutional_email, first_name, last_name, program_id, current_campus_id, current_shift_id, is_active
 ) VALUES
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', '22222222-2222-2222-2222-222222222222', 'SIS-22001', '0908-22-14264', '0908', 22, '14264', 'ana.gomez@alumnos.umg.edu.gt', 'Ana Lucia', 'Gomez Morales', 1, 17, 1, TRUE),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', '33333333-3333-3333-3333-333333333333', 'SIS-23002', '0905-23-9876', '0905', 23, '9876', 'carlos.salazar@alumnos.umg.edu.gt', 'Carlos Eduardo', 'Salazar Lopez', 1, 2, 1, TRUE)
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', '33333333-3333-3333-3333-333333333333', 'SIS-23009', '0909-23-09876', '0909', 23, '09876', 'carlos.salazar@alumnos.umg.edu.gt', 'Carlos Eduardo', 'Salazar Lopez', 1, 17, 2, TRUE)
 ON CONFLICT (id) DO UPDATE SET
     user_id = EXCLUDED.user_id,
     student_code = EXCLUDED.student_code,
@@ -253,20 +253,51 @@ DELETE FROM student_course_history
 WHERE student_id IN ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2');
 
 INSERT INTO student_course_history (student_id, course_id, year, term, grade, status) VALUES
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 1, 2024, '2024-1', 86.00, 'Passed'),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 2, 2024, '2024-1', 88.00, 'Passed'),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 3, 2024, '2024-1', 80.00, 'Passed'),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 4, 2024, '2024-1', 90.00, 'Passed'),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 5, 2024, '2024-1', 84.00, 'Passed'),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 6, 2024, '2024-2', 82.00, 'Passed'),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 8, 2024, '2024-2', 91.00, 'Passed'),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 12, 2025, '2025-1', 79.00, 'Passed'),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 17, 2025, '2025-2', 61.00, 'Passed'),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 22, 2025, '2025-2', 55.00, 'Failed'),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 1, 2025, '2025-1', 79.00, 'Passed'),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 2, 2025, '2025-1', 74.00, 'Passed'),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 8, 2025, '2025-1', 57.00, 'Failed'),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 6, 2025, '2025-2', 81.00, 'Passed');
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 1, 2022, '2022-1', 82.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 2, 2022, '2022-1', 85.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 3, 2022, '2022-1', 80.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 4, 2022, '2022-1', 88.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 5, 2022, '2022-1', 83.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 6, 2022, '2022-2', 81.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 7, 2022, '2022-2', 79.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 8, 2022, '2022-2', 87.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 9, 2022, '2022-2', 84.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 10, 2022, '2022-2', 82.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 11, 2023, '2023-1', 78.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 12, 2023, '2023-1', 86.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 13, 2023, '2023-1', 80.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 14, 2023, '2023-1', 88.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 15, 2023, '2023-1', 84.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 16, 2023, '2023-2', 79.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 17, 2023, '2023-2', 83.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 18, 2023, '2023-2', 77.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 19, 2023, '2023-2', 81.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 20, 2023, '2023-2', 80.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 21, 2024, '2024-1', 75.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 22, 2024, '2024-1', 82.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 23, 2024, '2024-1', 86.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 24, 2024, '2024-1', 78.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 25, 2024, '2024-1', 80.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 26, 2024, '2024-2', 79.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 27, 2024, '2024-2', 81.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 28, 2024, '2024-2', 77.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 29, 2024, '2024-2', 82.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 30, 2024, '2024-2', 78.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 31, 2025, '2025-1', 58.00, 'Failed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 32, 2025, '2025-1', 76.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 33, 2025, '2025-1', 55.00, 'Failed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 34, 2025, '2025-1', 79.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 35, 2025, '2025-1', 80.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 1, 2024, '2024-1', 78.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 2, 2024, '2024-1', 80.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 3, 2024, '2024-1', 76.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 4, 2024, '2024-1', 84.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 5, 2024, '2024-1', 79.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 6, 2024, '2024-2', 77.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 7, 2024, '2024-2', 75.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 8, 2024, '2024-2', 82.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 9, 2024, '2024-2', 80.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 10, 2024, '2024-2', 78.00, 'Passed');
 
 -- Pricing catalog in GTQ
 UPDATE pricing_catalog

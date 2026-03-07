@@ -177,6 +177,7 @@ CREATE TABLE IF NOT EXISTS enrollments (
 CREATE TABLE IF NOT EXISTS enrollment_courses (
     enrollment_id  UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
     course_id      INT NOT NULL REFERENCES courses(id) ON DELETE RESTRICT,
+    shift_id       SMALLINT NOT NULL REFERENCES shifts(id) ON DELETE RESTRICT,
     is_overdue     BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (enrollment_id, course_id)
 );
@@ -268,6 +269,34 @@ ALTER TABLE courses
 ALTER TABLE courses
     ADD COLUMN IF NOT EXISTS is_lab BOOLEAN NOT NULL DEFAULT FALSE;
 
+ALTER TABLE enrollment_courses
+    ADD COLUMN IF NOT EXISTS shift_id SMALLINT;
+
+UPDATE enrollment_courses ec
+SET shift_id = COALESCE(s.current_shift_id, cpc.shift_id, 1)
+FROM enrollments e
+JOIN students s ON s.id = e.student_id
+LEFT JOIN carnet_prefix_catalog cpc ON cpc.prefix = s.carnet_prefix
+WHERE ec.enrollment_id = e.id
+  AND ec.shift_id IS NULL;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'enrollment_courses_shift_id_fkey'
+    ) THEN
+        ALTER TABLE enrollment_courses
+            ADD CONSTRAINT enrollment_courses_shift_id_fkey
+            FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE RESTRICT;
+    END IF;
+END
+$$;
+
+ALTER TABLE enrollment_courses
+    ALTER COLUMN shift_id SET NOT NULL;
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_students_user_id ON students(user_id);
@@ -280,6 +309,7 @@ CREATE INDEX IF NOT EXISTS idx_history_course_student ON student_course_history(
 CREATE INDEX IF NOT EXISTS idx_transfers_student_status ON transfer_requests(student_id, status);
 CREATE INDEX IF NOT EXISTS idx_transfers_destination ON transfer_requests(to_campus_id, to_shift_id, status);
 CREATE INDEX IF NOT EXISTS idx_enrollments_student_status ON enrollments(student_id, status);
+CREATE INDEX IF NOT EXISTS idx_enrollment_courses_shift ON enrollment_courses(enrollment_id, shift_id);
 CREATE INDEX IF NOT EXISTS idx_payment_orders_student_status ON payment_orders(student_id, status);
 CREATE INDEX IF NOT EXISTS idx_payment_orders_reference ON payment_orders(reference_id, order_type);
 CREATE INDEX IF NOT EXISTS idx_payment_orders_status_expires ON payment_orders(status, expires_at);

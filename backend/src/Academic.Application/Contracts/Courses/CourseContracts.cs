@@ -15,7 +15,9 @@ public sealed record CourseDto(
 
 public sealed record OverdueCourseDto(int Id, string Code, string Name, short Credits);
 
-public sealed record CreateEnrollmentDto(IReadOnlyCollection<int> CourseIds);
+public sealed record EnrollmentCourseSelectionDto(int CourseId, string Shift);
+
+public sealed record CreateEnrollmentDto(IReadOnlyCollection<EnrollmentCourseSelectionDto> CourseSelections);
 
 public sealed record EnrollmentResultDto(
     Guid EnrollmentId,

@@ -84,6 +84,17 @@ export interface EnrollmentSummaryResponse {
   createdAt: string;
 }
 
+export type ShiftName = 'Saturday' | 'Sunday';
+
+export interface EnrollmentCourseSelectionRequest {
+  courseId: number;
+  shift: ShiftName;
+}
+
+export interface CreateEnrollmentRequest {
+  courseSelections: EnrollmentCourseSelectionRequest[];
+}
+
 export interface CourseDto {
   id: number;
   code: string;

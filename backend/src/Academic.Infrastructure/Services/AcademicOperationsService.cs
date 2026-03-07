@@ -572,22 +572,93 @@ public sealed class AcademicOperationsService(
     {
         await ReconcileExpiredPendingAsync(studentId, cancellationToken);
 
-        var uniqueIds = request.CourseIds.Where(x => x > 0).Distinct().ToList();
-        if (uniqueIds.Count == 0)
+        var requestedSelections = request.CourseSelections ?? Array.Empty<EnrollmentCourseSelectionDto>();
+        var validSelections = requestedSelections
+            .Where(x => x.CourseId > 0 && !string.IsNullOrWhiteSpace(x.Shift))
+            .ToList();
+
+        if (validSelections.Count == 0)
         {
             return Result<EnrollmentResultDto>.ValidationFailure(new Dictionary<string, string[]>
             {
-                ["courseIds"] = ["At least one valid course ID is required."]
+                ["courseSelections"] = ["Debe seleccionar al menos un curso válido."]
             });
         }
 
+        if (validSelections.Count > 6)
+        {
+            return Result<EnrollmentResultDto>.Failure("business_rule", "No puedes asignarte más de 6 cursos por solicitud.");
+        }
+
+        var duplicateCourseIds = validSelections
+            .GroupBy(x => x.CourseId)
+            .Where(x => x.Count() > 1)
+            .Select(x => x.Key)
+            .ToList();
+
+        if (duplicateCourseIds.Count > 0)
+        {
+            return Result<EnrollmentResultDto>.ValidationFailure(new Dictionary<string, string[]>
+            {
+                ["courseSelections"] = ["No puedes repetir cursos en la misma solicitud."]
+            });
+        }
+
+        var uniqueIds = validSelections.Select(x => x.CourseId).ToList();
+
         var student = await _dbContext.Students
             .AsNoTracking()
+            .Include(x => x.CarnetPrefixNavigation)
             .FirstOrDefaultAsync(x => x.Id == studentId, cancellationToken);
 
         if (student is null)
         {
             return Result<EnrollmentResultDto>.Failure("not_found", "Student profile not found.");
+        }
+
+        var shifts = await _dbContext.Shifts
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        var saturdayShift = shifts.FirstOrDefault(x => string.Equals(x.Name, "Saturday", StringComparison.OrdinalIgnoreCase));
+        var sundayShift = shifts.FirstOrDefault(x => string.Equals(x.Name, "Sunday", StringComparison.OrdinalIgnoreCase));
+
+        if (saturdayShift is null || sundayShift is null)
+        {
+            return Result<EnrollmentResultDto>.Failure("config_error", "No existe configuración de jornadas (Saturday/Sunday).");
+        }
+
+        var shiftIdByCourse = new Dictionary<int, short>();
+        foreach (var selection in validSelections)
+        {
+            var normalizedShift = NormalizeShift(selection.Shift);
+            var shift = shifts.FirstOrDefault(x => string.Equals(x.Name, normalizedShift, StringComparison.OrdinalIgnoreCase));
+            if (shift is null)
+            {
+                return Result<EnrollmentResultDto>.ValidationFailure(new Dictionary<string, string[]>
+                {
+                    ["courseSelections"] = [$"La jornada '{selection.Shift}' no es válida. Usa Saturday o Sunday."]
+                });
+            }
+
+            shiftIdByCourse[selection.CourseId] = shift.Id;
+        }
+
+        var primaryShiftId = student.CurrentShiftId;
+        primaryShiftId ??= student.CarnetPrefixNavigation?.ShiftId;
+        primaryShiftId ??= saturdayShift.Id;
+
+        var saturdayCount = shiftIdByCourse.Values.Count(x => x == saturdayShift.Id);
+        var sundayCount = shiftIdByCourse.Values.Count(x => x == sundayShift.Id);
+
+        if (primaryShiftId == saturdayShift.Id && saturdayCount <= sundayCount)
+        {
+            return Result<EnrollmentResultDto>.Failure("business_rule", "Distribución inválida: para plan sábado debes llevar mayoría de cursos en sábado.");
+        }
+
+        if (primaryShiftId == sundayShift.Id && sundayCount <= saturdayCount)
+        {
+            return Result<EnrollmentResultDto>.Failure("business_rule", "Distribución inválida: para plan domingo debes llevar mayoría de cursos en domingo.");
         }
 
         var hasPendingEnrollment = await _dbContext.Enrollments
@@ -635,28 +706,37 @@ public sealed class AcademicOperationsService(
             .Distinct()
             .ToListAsync(cancellationToken);
 
+        var passedCourseIdSet = passedCourseIds.ToHashSet();
         var approvedCredits = await _dbContext.Courses
             .Where(x => passedCourseIds.Contains(x.Id))
             .SumAsync(x => (int?)x.Credits, cancellationToken) ?? 0;
 
+        var currentAcademicCycle = await InferCurrentCycleAsync(passedCourseIds, cancellationToken);
+        var isEarlyCycleStudent = currentAcademicCycle <= 3;
+
         foreach (var course in selectedCourses)
         {
             var prerequisiteIds = course.Courses.Select(x => x.Id).Distinct().ToList();
-            var unmet = prerequisiteIds.Where(id => !passedCourseIds.Contains(id)).ToList();
-            if (unmet.Count > 0)
-            {
-                return Result<EnrollmentResultDto>.Failure("business_rule", $"Prerequisites are not met for course {course.Code}.");
-            }
-
             var minCredits = course.CourseCreditRequirements
                 .Select(x => x.MinApprovedCredits)
                 .DefaultIfEmpty((short)0)
                 .Max();
-            if (approvedCredits < minCredits)
+
+            var canAdvanceWithoutPrerequisites = isEarlyCycleStudent && prerequisiteIds.Count == 0;
+            if (!canAdvanceWithoutPrerequisites)
             {
-                return Result<EnrollmentResultDto>.Failure(
-                    "business_rule",
-                    $"No cumples el mínimo de créditos aprobados para {course.Code}. Requiere {minCredits}.");
+                var unmet = prerequisiteIds.Where(id => !passedCourseIdSet.Contains(id)).ToList();
+                if (unmet.Count > 0)
+                {
+                    return Result<EnrollmentResultDto>.Failure("business_rule", $"No cumples los prerrequisitos para el curso {course.Code}.");
+                }
+
+                if (approvedCredits < minCredits)
+                {
+                    return Result<EnrollmentResultDto>.Failure(
+                        "business_rule",
+                        $"No cumples el mínimo de créditos aprobados para {course.Code}. Requiere {minCredits}.");
+                }
             }
         }
 
@@ -729,6 +809,7 @@ public sealed class AcademicOperationsService(
             {
                 EnrollmentId = enrollment.Id,
                 CourseId = courseId,
+                ShiftId = shiftIdByCourse[courseId],
                 IsOverdue = overdueIds.Contains(courseId)
             });
         }
@@ -746,7 +827,7 @@ public sealed class AcademicOperationsService(
                 enrollment.TotalAmount,
                 payment.Currency,
                 payment.ExpiresAt,
-                courses = uniqueIds
+                courseSelections = validSelections.Select(x => new { x.CourseId, Shift = NormalizeShift(x.Shift) }).ToList()
             },
             null,
             cancellationToken);
@@ -1530,6 +1611,27 @@ public sealed class AcademicOperationsService(
 
     private static bool IsPaymentExpired(PaymentOrder payment)
         => payment.ExpiresAt <= DateTime.UtcNow;
+
+    private async Task<short> InferCurrentCycleAsync(IReadOnlyCollection<int> passedCourseIds, CancellationToken cancellationToken)
+    {
+        if (passedCourseIds.Count == 0)
+        {
+            return 1;
+        }
+
+        var maxPassedCycle = await _dbContext.Courses
+            .AsNoTracking()
+            .Where(x => passedCourseIds.Contains(x.Id))
+            .Select(x => (short?)x.Cycle)
+            .MaxAsync(cancellationToken) ?? 0;
+
+        if (maxPassedCycle <= 0)
+        {
+            return 1;
+        }
+
+        return (short)Math.Min(10, maxPassedCycle + 1);
+    }
 
     private static string BuildPrerequisiteSummary(IReadOnlyCollection<string> courseCodes, IReadOnlyCollection<short> creditRequirements)
     {

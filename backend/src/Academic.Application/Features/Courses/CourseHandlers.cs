@@ -65,11 +65,11 @@ public sealed class CreateEnrollmentCommandHandler(ICourseService courseService,
             return Task.FromResult(Result<EnrollmentResultDto>.Failure("forbidden", "Only students can create enrollments."));
         }
 
-        if (request.Request.CourseIds.Count == 0)
+        if (request.Request.CourseSelections is null || request.Request.CourseSelections.Count == 0)
         {
             return Task.FromResult(Result<EnrollmentResultDto>.ValidationFailure(new Dictionary<string, string[]>
             {
-                ["courseIds"] = ["At least one course is required."]
+                ["courseSelections"] = ["Debe seleccionar al menos un curso."]
             }));
         }
 

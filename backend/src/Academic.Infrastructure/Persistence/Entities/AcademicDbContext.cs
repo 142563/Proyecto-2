@@ -390,8 +390,11 @@ public partial class AcademicDbContext : DbContext
 
             entity.ToTable("enrollment_courses");
 
+            entity.HasIndex(e => new { e.EnrollmentId, e.ShiftId }, "idx_enrollment_courses_shift");
+
             entity.Property(e => e.EnrollmentId).HasColumnName("enrollment_id");
             entity.Property(e => e.CourseId).HasColumnName("course_id");
+            entity.Property(e => e.ShiftId).HasColumnName("shift_id");
             entity.Property(e => e.IsOverdue)
                 .HasDefaultValue(false)
                 .HasColumnName("is_overdue");
@@ -404,6 +407,11 @@ public partial class AcademicDbContext : DbContext
             entity.HasOne(d => d.Enrollment).WithMany(p => p.EnrollmentCourses)
                 .HasForeignKey(d => d.EnrollmentId)
                 .HasConstraintName("enrollment_courses_enrollment_id_fkey");
+
+            entity.HasOne(d => d.Shift).WithMany(p => p.EnrollmentCourses)
+                .HasForeignKey(d => d.ShiftId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("enrollment_courses_shift_id_fkey");
         });
 
         modelBuilder.Entity<PaymentOrder>(entity =>

@@ -9,11 +9,15 @@ public partial class EnrollmentCourse
 
     public int CourseId { get; set; }
 
+    public short ShiftId { get; set; }
+
     public bool IsOverdue { get; set; }
 
     public virtual Course Course { get; set; } = null!;
 
     public virtual Enrollment Enrollment { get; set; } = null!;
+
+    public virtual Shift Shift { get; set; } = null!;
 }
 
 

@@ -1,12 +1,15 @@
-﻿import { CommonModule } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, inject } from '@angular/core';
 import { API_BASE_URL } from '../../core/config/api.config';
 import {
   ApiEnvelope,
   CourseDto,
+  CreateEnrollmentRequest,
   EnrollmentSummaryResponse,
-  OverdueCourseDto
+  MeResponse,
+  OverdueCourseDto,
+  ShiftName
 } from '../../shared/models/api.models';
 import { StatusBadgeComponent } from '../../shared/components/status-badge.component';
 
@@ -18,34 +21,59 @@ import { StatusBadgeComponent } from '../../shared/components/status-badge.compo
     <section class="grid gap-6 lg:grid-cols-2">
       <article class="panel p-6">
         <h2 class="section-title text-lg">Cursos del Pensum</h2>
-        <p class="mt-1 text-sm text-muted">Pensum oficial por ciclo. Selecciona cursos extra o atrasados para generar orden de pago.</p>
+        <p class="mt-1 text-sm text-muted">
+          Selecciona un ciclo para ver cursos disponibles. Puedes elegir jornada por curso para tu asignación.
+        </p>
 
-        <div class="mt-4 space-y-4">
-          <section *ngFor="let cycle of cycleOrder">
-            <div *ngIf="coursesByCycle.get(cycle)?.length">
-              <h3 class="font-display text-sm font-bold uppercase tracking-wide text-[color:var(--umg-navy-700)]">Ciclo {{ cycle }}</h3>
-              <div class="mt-2 space-y-2">
-                <label
-                  *ngFor="let course of coursesByCycle.get(cycle)"
-                  class="block rounded-lg border border-slate-200 p-3"
-                >
-                  <div class="flex items-center justify-between gap-3">
-                    <span class="font-semibold text-slate-800">{{ course.code }} - {{ course.name }}</span>
-                    <input type="checkbox" [checked]="selectedCourseIds.has(course.id)" (change)="toggleCourse(course.id)" />
-                  </div>
-                  <p class="mt-1 text-xs text-muted">
-                    {{ course.credits }} créditos · {{ course.hoursPerWeek }} h/semana · {{ course.hoursTotal }} h totales
-                    <span *ngIf="course.isLab">· Con laboratorio</span>
-                  </p>
-                  <p class="mt-1 text-xs text-muted">Prerrequisitos: {{ course.prerequisiteSummary }}</p>
-                  <span *ngIf="course.isOverdue" class="mt-2 inline-block rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700">Atrasado</span>
-                </label>
-              </div>
-            </div>
-          </section>
+        <div class="mt-4">
+          <label class="text-xs font-semibold uppercase tracking-wide text-[color:var(--umg-navy-700)]">Selecciona ciclo</label>
+          <div class="mt-2 flex flex-wrap gap-2">
+            <button
+              *ngFor="let cycle of cycleOrder"
+              type="button"
+              class="rounded-full border px-3 py-1 text-sm transition"
+              [ngClass]="selectedCycle === cycle ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 text-slate-700'"
+              (click)="setCycle(cycle)"
+            >
+              Ciclo {{ cycle }}
+            </button>
+          </div>
         </div>
 
-        <button class="btn-primary mt-4 w-full px-4 py-2" (click)="createEnrollment()">
+        <div class="mt-4 space-y-2">
+          <label *ngFor="let course of visibleCourses" class="block rounded-lg border border-slate-200 p-3">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <span class="font-semibold text-slate-800">{{ course.code }} - {{ course.name }}</span>
+                <p class="mt-1 text-xs text-muted">
+                  {{ course.credits }} créditos · {{ course.hoursPerWeek }} h/semana · {{ course.hoursTotal }} h totales
+                  <span *ngIf="course.isLab">· Con laboratorio</span>
+                </p>
+                <p class="mt-1 text-xs text-muted">Prerrequisitos: {{ course.prerequisiteSummary }}</p>
+                <span *ngIf="course.isOverdue" class="mt-2 inline-block rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700">Atrasado</span>
+              </div>
+              <input type="checkbox" [checked]="isSelected(course.id)" (change)="toggleCourse(course.id)" />
+            </div>
+
+            <div *ngIf="isSelected(course.id)" class="mt-3 rounded-md bg-slate-50 p-2">
+              <label class="text-xs font-semibold uppercase tracking-wide text-slate-700">Jornada</label>
+              <select
+                class="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                [value]="selectedShift(course.id)"
+                (change)="updateCourseShift(course.id, $any($event.target).value)"
+              >
+                <option value="Saturday">Sábado</option>
+                <option value="Sunday">Domingo</option>
+              </select>
+            </div>
+          </label>
+        </div>
+
+        <button
+          class="btn-primary mt-4 w-full px-4 py-2 disabled:cursor-not-allowed disabled:opacity-60"
+          [disabled]="selectedTotal === 0 || !isDistributionValid"
+          (click)="createEnrollment()"
+        >
           Generar asignación + orden de pago
         </button>
       </article>
@@ -55,6 +83,17 @@ import { StatusBadgeComponent } from '../../shared/components/status-badge.compo
         <ul class="mt-4 space-y-2">
           <li *ngFor="let item of overdue" class="rounded-lg border border-slate-200 p-3">{{ item.code }} - {{ item.name }}</li>
         </ul>
+        <p *ngIf="overdue.length === 0" class="mt-3 text-sm text-muted">No tienes cursos atrasados actualmente.</p>
+
+        <section class="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <h3 class="text-sm font-bold uppercase tracking-wide text-[color:var(--umg-navy-700)]">Resumen de carga</h3>
+          <p class="mt-2 text-sm text-slate-700">Plan principal: {{ shiftLabel(primaryShift) }}</p>
+          <p class="mt-1 text-sm text-slate-700">Total seleccionados: {{ selectedTotal }} / 6</p>
+          <p class="mt-1 text-sm text-slate-700">Sábado: {{ saturdayCount }} · Domingo: {{ sundayCount }}</p>
+          <p class="mt-2 text-sm" [class.text-emerald-700]="isDistributionValid" [class.text-rose-700]="!isDistributionValid">
+            {{ distributionMessage }}
+          </p>
+        </section>
 
         <p *ngIf="message" class="mt-4 text-sm text-emerald-700">{{ message }}</p>
         <p *ngIf="error" class="mt-2 text-sm text-rose-700">{{ error }}</p>
@@ -105,16 +144,77 @@ export class CoursesPage {
   courses: CourseDto[] = [];
   coursesByCycle = new Map<number, CourseDto[]>();
   cycleOrder: number[] = [];
+  selectedCycle: number | null = null;
+  visibleCourses: CourseDto[] = [];
   overdue: OverdueCourseDto[] = [];
   enrollments: EnrollmentSummaryResponse[] = [];
-  selectedCourseIds = new Set<number>();
+  selectedCourseShifts = new Map<number, ShiftName>();
+  primaryShift: ShiftName = 'Saturday';
   message = '';
   error = '';
 
   constructor() {
+    this.loadProfile();
     this.loadPensum();
     this.loadOverdue();
     this.loadEnrollments();
+  }
+
+  get selectedTotal(): number {
+    return this.selectedCourseShifts.size;
+  }
+
+  get saturdayCount(): number {
+    return Array.from(this.selectedCourseShifts.values()).filter((shift) => shift === 'Saturday').length;
+  }
+
+  get sundayCount(): number {
+    return Array.from(this.selectedCourseShifts.values()).filter((shift) => shift === 'Sunday').length;
+  }
+
+  get isDistributionValid(): boolean {
+    if (this.selectedTotal === 0) {
+      return true;
+    }
+
+    if (this.selectedTotal > 6) {
+      return false;
+    }
+
+    if (this.primaryShift === 'Saturday') {
+      return this.saturdayCount > this.sundayCount;
+    }
+
+    return this.sundayCount > this.saturdayCount;
+  }
+
+  get distributionMessage(): string {
+    if (this.selectedTotal === 0) {
+      return 'Selecciona cursos para validar la distribución.';
+    }
+
+    if (this.selectedTotal > 6) {
+      return 'Exceso de carga: máximo 6 cursos por solicitud.';
+    }
+
+    if (this.isDistributionValid) {
+      return 'Distribución válida según tu plan.';
+    }
+
+    return this.primaryShift === 'Saturday'
+      ? 'Distribución inválida: debes llevar mayoría de cursos en sábado.'
+      : 'Distribución inválida: debes llevar mayoría de cursos en domingo.';
+  }
+
+  loadProfile(): void {
+    this.http.get<ApiEnvelope<MeResponse>>(`${this.baseUrl}/me`).subscribe((response) => {
+      if (!response.success) {
+        return;
+      }
+
+      this.primaryShift = this.normalizeShift(response.data.shiftName);
+      this.realignSelectionByPrimaryShift();
+    });
   }
 
   loadPensum(): void {
@@ -136,36 +236,50 @@ export class CoursesPage {
     });
   }
 
+  setCycle(cycle: number): void {
+    this.selectedCycle = cycle;
+    this.refreshVisibleCourses();
+  }
+
+  isSelected(courseId: number): boolean {
+    return this.selectedCourseShifts.has(courseId);
+  }
+
+  selectedShift(courseId: number): ShiftName {
+    return this.selectedCourseShifts.get(courseId) ?? this.primaryShift;
+  }
+
   toggleCourse(courseId: number): void {
-    if (this.selectedCourseIds.has(courseId)) {
-      this.selectedCourseIds.delete(courseId);
+    if (this.selectedCourseShifts.has(courseId)) {
+      this.selectedCourseShifts.delete(courseId);
       return;
     }
 
-    this.selectedCourseIds.add(courseId);
+    this.selectedCourseShifts.set(courseId, this.primaryShift);
   }
 
-  private groupByCycle(): void {
-    const map = new Map<number, CourseDto[]>();
-    for (const course of this.courses) {
-      const cycle = course.cycle ?? 0;
-      const group = map.get(cycle) ?? [];
-      group.push(course);
-      map.set(cycle, group);
+  updateCourseShift(courseId: number, shift: string): void {
+    if (!this.selectedCourseShifts.has(courseId)) {
+      return;
     }
 
-    this.coursesByCycle = map;
-    this.cycleOrder = Array.from(map.keys()).sort((a, b) => a - b);
+    this.selectedCourseShifts.set(courseId, this.normalizeShift(shift));
+  }
+
+  shiftLabel(shift: ShiftName): string {
+    return shift === 'Saturday' ? 'Sábado' : 'Domingo';
   }
 
   createEnrollment(): void {
     this.message = '';
     this.error = '';
 
+    const payload: CreateEnrollmentRequest = {
+      courseSelections: Array.from(this.selectedCourseShifts.entries()).map(([courseId, shift]) => ({ courseId, shift }))
+    };
+
     this.http
-      .post<ApiEnvelope<{ paymentOrderId: string; totalAmount: number; currency: string }>>(`${this.baseUrl}/enrollments`, {
-        courseIds: Array.from(this.selectedCourseIds)
-      })
+      .post<ApiEnvelope<{ paymentOrderId: string; totalAmount: number; currency: string }>>(`${this.baseUrl}/enrollments`, payload)
       .subscribe({
         next: (response) => {
           if (!response.success) {
@@ -174,11 +288,11 @@ export class CoursesPage {
           }
 
           this.message = `Asignación creada. Orden ${response.data.paymentOrderId} - Total Q${response.data.totalAmount.toFixed(2)} ${response.data.currency}`;
-          this.selectedCourseIds.clear();
+          this.selectedCourseShifts.clear();
           this.loadEnrollments();
         },
         error: (error: HttpErrorResponse) => {
-          this.error = error.error?.error?.message ?? 'Error de conexión.';
+          this.error = this.extractErrorMessage(error);
         }
       });
   }
@@ -198,8 +312,79 @@ export class CoursesPage {
         this.loadEnrollments();
       },
       error: (error: HttpErrorResponse) => {
-        this.error = error.error?.error?.message ?? 'Error de conexión.';
+        this.error = this.extractErrorMessage(error);
       }
     });
+  }
+
+  private groupByCycle(): void {
+    const map = new Map<number, CourseDto[]>();
+    for (const course of this.courses) {
+      const cycle = course.cycle ?? 0;
+      const group = map.get(cycle) ?? [];
+      group.push(course);
+      map.set(cycle, group);
+    }
+
+    this.coursesByCycle = map;
+    this.cycleOrder = Array.from(map.keys()).sort((a, b) => a - b);
+    if (this.selectedCycle === null || !map.has(this.selectedCycle)) {
+      this.selectedCycle = this.cycleOrder[0] ?? null;
+    }
+
+    this.pruneSelection();
+    this.refreshVisibleCourses();
+  }
+
+  private refreshVisibleCourses(): void {
+    if (this.selectedCycle === null) {
+      this.visibleCourses = [];
+      return;
+    }
+
+    this.visibleCourses = this.coursesByCycle.get(this.selectedCycle) ?? [];
+  }
+
+  private pruneSelection(): void {
+    const validIds = new Set(this.courses.map((course) => course.id));
+    Array.from(this.selectedCourseShifts.keys())
+      .filter((courseId) => !validIds.has(courseId))
+      .forEach((courseId) => this.selectedCourseShifts.delete(courseId));
+  }
+
+  private realignSelectionByPrimaryShift(): void {
+    if (this.selectedCourseShifts.size === 0) {
+      return;
+    }
+
+    Array.from(this.selectedCourseShifts.entries())
+      .filter(([, shift]) => shift !== 'Saturday' && shift !== 'Sunday')
+      .forEach(([courseId]) => this.selectedCourseShifts.set(courseId, this.primaryShift));
+  }
+
+  private normalizeShift(shift: string | undefined | null): ShiftName {
+    const value = (shift ?? '').trim().toLowerCase();
+    if (value === 'sunday' || value === 'domingo') {
+      return 'Sunday';
+    }
+
+    return 'Saturday';
+  }
+
+  private extractErrorMessage(error: HttpErrorResponse): string {
+    const explicitMessage = error.error?.error?.message ?? error.error?.message;
+    if (explicitMessage) {
+      return explicitMessage;
+    }
+
+    const validationErrors = error.error?.validationErrors as Record<string, string[]> | undefined;
+    if (validationErrors) {
+      const firstKey = Object.keys(validationErrors)[0];
+      if (firstKey && validationErrors[firstKey]?.length) {
+        return validationErrors[firstKey][0];
+      }
+    }
+
+    return 'Error de conexión.';
   }
 }

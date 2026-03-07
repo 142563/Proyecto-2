@@ -17,6 +17,8 @@ public partial class Shift
 
     public virtual ICollection<CarnetPrefixCatalog> CarnetPrefixCatalogs { get; set; } = new List<CarnetPrefixCatalog>();
 
+    public virtual ICollection<EnrollmentCourse> EnrollmentCourses { get; set; } = new List<EnrollmentCourse>();
+
     public virtual ICollection<TransferRequest> TransferRequests { get; set; } = new List<TransferRequest>();
 }
 
