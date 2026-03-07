@@ -47,6 +47,19 @@ public sealed class AcademicOperationsService(
     private readonly AcademicOptions _academicOptions = academicOptions.Value;
     private readonly IHostEnvironment _hostEnvironment = hostEnvironment;
     private readonly ILogger<AcademicOperationsService> _logger = logger;
+    private static readonly IReadOnlyList<CertificateTypeDefinition> CertificateTypes =
+    [
+        new("courses", "Certificacion de cursos", "Detalle de cursos aprobados por el estudiante.", false),
+        new("enrollment", "Certificacion de matricula", "Constancia de inscripcion y matricula activa.", false),
+        new("internships", "Certificacion de pasantias", "Constancia academica de pasantias registradas.", false),
+        new("pensum-closure", "Cierre de pensum", "Disponible solo cuando el pensum completo esta aprobado.", true)
+    ];
+
+    private sealed record CertificateTypeDefinition(
+        string Code,
+        string Name,
+        string Description,
+        bool RequiresFullPensum);
 
     public async Task<Result<AuthResponseDto>> LoginAsync(string email, string password, CancellationToken cancellationToken)
     {
@@ -1038,6 +1051,15 @@ public sealed class AcademicOperationsService(
             payment.CancelledAt));
     }
 
+    public Task<Result<IReadOnlyList<CertificateTypeDto>>> GetTypesAsync(CancellationToken cancellationToken)
+    {
+        var types = CertificateTypes
+            .Select(x => new CertificateTypeDto(x.Code, x.Name, x.Description, x.RequiresFullPensum))
+            .ToList();
+
+        return Task.FromResult(Result<IReadOnlyList<CertificateTypeDto>>.Success(types));
+    }
+
     public async Task<Result<CertificateCreatedDto>> CreateAsync(Guid studentId, CreateCertificateDto request, CancellationToken cancellationToken)
     {
         await ReconcileExpiredPendingAsync(studentId, cancellationToken);
@@ -1058,13 +1080,57 @@ public sealed class AcademicOperationsService(
 
         if (activeCertificate)
         {
-            return Result<CertificateCreatedDto>.Failure("business_rule", "An active certificate request already exists.");
+            return Result<CertificateCreatedDto>.Failure("business_rule", "Ya tienes una solicitud de certificacion activa.");
+        }
+
+        var certificateType = ResolveCertificateType(request.Purpose);
+        if (certificateType is null)
+        {
+            return Result<CertificateCreatedDto>.ValidationFailure(new Dictionary<string, string[]>
+            {
+                ["purpose"] = [$"Tipo de certificacion no valido. Opciones: {string.Join(", ", CertificateTypes.Select(x => x.Name))}."]
+            });
+        }
+
+        if (certificateType.RequiresFullPensum)
+        {
+            var requiredCourses = await _dbContext.Courses
+                .AsNoTracking()
+                .Where(x => x.ProgramId == student.ProgramId && x.IsActive)
+                .Select(x => new { x.Id, x.Code, x.Name })
+                .ToListAsync(cancellationToken);
+
+            if (requiredCourses.Count == 0)
+            {
+                return Result<CertificateCreatedDto>.Failure("config_error", "No hay cursos activos configurados para este programa.");
+            }
+
+            var approvedIds = await _dbContext.StudentCourseHistories
+                .AsNoTracking()
+                .Where(x => x.StudentId == studentId && EF.Functions.ILike(x.Status, "passed"))
+                .Select(x => x.CourseId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            var approvedIdSet = approvedIds.ToHashSet();
+            var pendingCourses = requiredCourses
+                .Where(x => !approvedIdSet.Contains(x.Id))
+                .OrderBy(x => x.Code)
+                .ToList();
+
+            if (pendingCourses.Count > 0)
+            {
+                var pendingPreview = string.Join(", ", pendingCourses.Take(4).Select(x => $"{x.Code} {x.Name}"));
+                return Result<CertificateCreatedDto>.Failure(
+                    "business_rule",
+                    $"Para solicitar Cierre de pensum debes tener todos los cursos aprobados. Pendientes: {pendingCourses.Count}. {pendingPreview}");
+            }
         }
 
         var certificatePricing = await GetServicePricingAsync("Certificate", student.ProgramId, cancellationToken);
         if (certificatePricing is null || certificatePricing.Amount <= 0)
         {
-            return Result<CertificateCreatedDto>.Failure("config_error", "Certificate pricing is not configured.");
+            return Result<CertificateCreatedDto>.Failure("config_error", "No existe configuracion de precio para certificaciones.");
         }
 
         var now = DateTime.UtcNow;
@@ -1081,7 +1147,7 @@ public sealed class AcademicOperationsService(
             Amount = certificatePricing.Amount,
             Currency = certificatePricing.Currency,
             Status = DomainStatuses.Payment.Pending,
-            Description = "Pago certificacion digital",
+            Description = $"Pago {certificateType.Name}",
             CreatedAt = now,
             ExpiresAt = now.AddHours(_academicOptions.PendingPaymentExpirationHours)
         };
@@ -1091,11 +1157,11 @@ public sealed class AcademicOperationsService(
             Id = certificateId,
             StudentId = studentId,
             PaymentOrderId = paymentId,
-            Purpose = request.Purpose.Trim(),
+            Purpose = certificateType.Name,
             Status = DomainStatuses.Certificate.Requested,
             VerificationCode = verificationCode,
             CreatedAt = now,
-            Metadata = JsonSerializer.Serialize(new { source = "api", requestedBy = student.User.Email })
+            Metadata = JsonSerializer.Serialize(new { source = "api", requestedBy = student.User.Email, certificateType = certificateType.Code })
         };
 
         _dbContext.PaymentOrders.Add(payment);
@@ -1694,6 +1760,45 @@ public sealed class AcademicOperationsService(
             "domingo" => "Sunday",
             _ => value.Trim()
         };
+    }
+
+    private static CertificateTypeDefinition? ResolveCertificateType(string value)
+    {
+        var normalized = NormalizeForLookup(value);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return null;
+        }
+
+        return normalized switch
+        {
+            "courses" => CertificateTypes.Single(x => x.Code == "courses"),
+            "certificaciondecursos" => CertificateTypes.Single(x => x.Code == "courses"),
+            "certificaciondecursosaprobados" => CertificateTypes.Single(x => x.Code == "courses"),
+            "enrollment" => CertificateTypes.Single(x => x.Code == "enrollment"),
+            "certificaciondematricula" => CertificateTypes.Single(x => x.Code == "enrollment"),
+            "internships" => CertificateTypes.Single(x => x.Code == "internships"),
+            "certificaciondepasantias" => CertificateTypes.Single(x => x.Code == "internships"),
+            "pensumclosure" => CertificateTypes.Single(x => x.Code == "pensum-closure"),
+            "pensum-closure" => CertificateTypes.Single(x => x.Code == "pensum-closure"),
+            "cierrepensum" => CertificateTypes.Single(x => x.Code == "pensum-closure"),
+            _ => null
+        };
+    }
+
+    private static string NormalizeForLookup(string input)
+    {
+        var normalized = RemoveDiacritics(input).Trim().ToLowerInvariant();
+        var builder = new StringBuilder(normalized.Length);
+        foreach (var character in normalized)
+        {
+            if (char.IsLetterOrDigit(character) || character == '-')
+            {
+                builder.Append(character);
+            }
+        }
+
+        return builder.ToString();
     }
 
     private static string RemoveDiacritics(string input)

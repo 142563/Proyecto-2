@@ -130,7 +130,21 @@ Luego vuelve a ejecutar `dotnet build` / `dotnet run`.
 - Student 2:
   - `carlos.salazar@alumnos.umg.edu.gt`
   - `Student123!`
-  - Carnet: `0905-23-9876`
+  - Carnet: `0909-23-09876`
+- Student 3 (Psicología Industrial 7305 - cierre de pensum elegible):
+  - `maria.ortiz@alumnos.umg.edu.gt`
+  - `Student123!`
+  - Carnet: `7305-21-10458`
+
+## Certificaciones UMG implementadas
+- `Certificación de cursos`
+- `Certificación de matrícula`
+- `Certificación de pasantías`
+- `Cierre de pensum` (solo si todo el pensum está aprobado)
+
+Fuente pública UMG usada para el catálogo:
+- https://miumg.umg.edu.gt/pensum (opción de certificaciones)
+- https://www.umg.edu.gt/info/Paginas/Cierre-de-Pensum
 
 ## Tarifas referenciales (GTQ)
 - Transfer: `Q150.00`
@@ -168,6 +182,7 @@ Patrón: `NNNN-YY-NNNN|NNNNN`
   - `GET /payments/pending` (Admin)
   - `POST /payments/{id}/mark-paid` (Admin)
 - Certificates:
+  - `GET /certificates/types`
   - `POST /certificates`
   - `GET /certificates/my`
   - `POST /certificates/{id}/cancel`

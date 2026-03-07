@@ -14,7 +14,8 @@ ON CONFLICT (id) DO UPDATE SET
 
 -- Programs
 INSERT INTO programs (id, code, name, is_active) VALUES
-(1, 'SIS-2014', 'Ingenieria en Sistemas de Informacion y Ciencias de la Computacion', TRUE)
+(1, 'SIS-2014', 'Ingenieria en Sistemas de Informacion y Ciencias de la Computacion', TRUE),
+(2, 'PSI-7305-2014', 'Licenciatura en Psicologia Industrial/Organizacional', TRUE)
 ON CONFLICT (id) DO UPDATE SET
     code = EXCLUDED.code,
     name = EXCLUDED.name,
@@ -39,7 +40,8 @@ INSERT INTO campuses (id, code, name, address, campus_type, region, is_active) V
 (15, 'UMG-SJSAC', 'Centro Universitario San Juan Sacatepequez', '1a Calle 3-15, Zona 1, San Juan Sacatepequez', 'Centro', 'Guatemala', TRUE),
 (16, 'UMG-CHIMAL', 'Centro Universitario Chimaltenango', '1a Avenida 4-20, Zona 2, Chimaltenango', 'Centro', 'Chimaltenango', TRUE),
 (17, 'UMG-ESCUINT', 'Centro Universitario Escuintla', '5a Avenida 12-14, Zona 1, Escuintla', 'Centro', 'Escuintla', TRUE),
-(18, 'UMG-SLUCIA', 'Centro Universitario Santa Lucia Cotzumalguapa', '6a Calle 2-30, Zona 1, Santa Lucia Cotzumalguapa', 'Centro', 'Escuintla', TRUE)
+(18, 'UMG-SLUCIA', 'Centro Universitario Santa Lucia Cotzumalguapa', '6a Calle 2-30, Zona 1, Santa Lucia Cotzumalguapa', 'Centro', 'Escuintla', TRUE),
+(19, 'UMG-MAZA', 'Centro Universitario Mazatenango', '4a Calle 8-40, Mazatenango, Suchitepequez', 'Centro', 'Suchitepequez', TRUE)
 ON CONFLICT (id) DO UPDATE SET
     code = EXCLUDED.code,
     name = EXCLUDED.name,
@@ -67,7 +69,8 @@ INSERT INTO campus_shift_capacity (campus_id, shift_id, total_capacity, occupied
 (15, 1, 90, 29), (15, 2, 90, 28),
 (16, 1, 120, 48), (16, 2, 120, 45),
 (17, 1, 130, 52), (17, 2, 130, 50),
-(18, 1, 110, 42), (18, 2, 110, 39)
+(18, 1, 110, 42), (18, 2, 110, 39),
+(19, 1, 120, 44), (19, 2, 120, 41)
 ON CONFLICT (campus_id, shift_id) DO UPDATE SET
     total_capacity = EXCLUDED.total_capacity,
     occupied_capacity = EXCLUDED.occupied_capacity,
@@ -84,7 +87,9 @@ INSERT INTO carnet_prefix_catalog (prefix, program_id, campus_id, shift_id, desc
 ('0907', 1, 6, 1, 'Sistemas Campus Antigua Guatemala plan sabado', TRUE),
 ('0908', 1, 17, 1, 'Sistemas Centro Escuintla plan sabado', TRUE),
 ('0909', 1, 17, 2, 'Sistemas Centro Escuintla plan domingo', TRUE),
-('0910', 1, 16, 1, 'Sistemas Centro Chimaltenango plan sabado', TRUE)
+('0910', 1, 16, 1, 'Sistemas Centro Chimaltenango plan sabado', TRUE),
+('7305', 2, 19, 1, 'Psicologia Industrial Mazatenango plan sabado', TRUE),
+('7306', 2, 19, 2, 'Psicologia Industrial Mazatenango plan domingo', TRUE)
 ON CONFLICT (prefix) DO UPDATE SET
     program_id = EXCLUDED.program_id,
     campus_id = EXCLUDED.campus_id,
@@ -96,7 +101,8 @@ ON CONFLICT (prefix) DO UPDATE SET
 INSERT INTO users (id, email, password_hash, is_active) VALUES
 ('11111111-1111-1111-1111-111111111111', 'admin@umg.edu.gt', crypt('Admin123!', gen_salt('bf')), TRUE),
 ('22222222-2222-2222-2222-222222222222', 'ana.gomez@alumnos.umg.edu.gt', crypt('Student123!', gen_salt('bf')), TRUE),
-('33333333-3333-3333-3333-333333333333', 'carlos.salazar@alumnos.umg.edu.gt', crypt('Student123!', gen_salt('bf')), TRUE)
+('33333333-3333-3333-3333-333333333333', 'carlos.salazar@alumnos.umg.edu.gt', crypt('Student123!', gen_salt('bf')), TRUE),
+('44444444-4444-4444-4444-444444444444', 'maria.ortiz@alumnos.umg.edu.gt', crypt('Student123!', gen_salt('bf')), TRUE)
 ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
     password_hash = EXCLUDED.password_hash,
@@ -107,7 +113,8 @@ ON CONFLICT (id) DO UPDATE SET
 INSERT INTO user_roles (user_id, role_id) VALUES
 ('11111111-1111-1111-1111-111111111111', 1),
 ('22222222-2222-2222-2222-222222222222', 2),
-('33333333-3333-3333-3333-333333333333', 2)
+('33333333-3333-3333-3333-333333333333', 2),
+('44444444-4444-4444-4444-444444444444', 2)
 ON CONFLICT (user_id, role_id) DO NOTHING;
 
 -- Reset transactional demo data to keep seed idempotent and avoid stale locks.
@@ -117,38 +124,44 @@ WHERE enrollment_id IN (
     FROM enrollments
     WHERE student_id IN (
         'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1',
-        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2'
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2',
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3'
     )
 );
 
 DELETE FROM certificates
 WHERE student_id IN (
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1',
-    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2'
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3'
 );
 
 DELETE FROM transfer_requests
 WHERE student_id IN (
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1',
-    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2'
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3'
 );
 
 DELETE FROM enrollments
 WHERE student_id IN (
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1',
-    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2'
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3'
 );
 
 DELETE FROM payment_orders
 WHERE student_id IN (
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1',
-    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2'
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3'
 );
 
 DELETE FROM audit_logs
 WHERE user_id IN (
     '22222222-2222-2222-2222-222222222222',
-    '33333333-3333-3333-3333-333333333333'
+    '33333333-3333-3333-3333-333333333333',
+    '44444444-4444-4444-4444-444444444444'
 );
 
 -- Students
@@ -157,7 +170,8 @@ INSERT INTO students (
     institutional_email, first_name, last_name, program_id, current_campus_id, current_shift_id, is_active
 ) VALUES
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', '22222222-2222-2222-2222-222222222222', 'SIS-22001', '0908-22-14264', '0908', 22, '14264', 'ana.gomez@alumnos.umg.edu.gt', 'Ana Lucia', 'Gomez Morales', 1, 17, 1, TRUE),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', '33333333-3333-3333-3333-333333333333', 'SIS-23009', '0909-23-09876', '0909', 23, '09876', 'carlos.salazar@alumnos.umg.edu.gt', 'Carlos Eduardo', 'Salazar Lopez', 1, 17, 2, TRUE)
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', '33333333-3333-3333-3333-333333333333', 'SIS-23009', '0909-23-09876', '0909', 23, '09876', 'carlos.salazar@alumnos.umg.edu.gt', 'Carlos Eduardo', 'Salazar Lopez', 1, 17, 2, TRUE),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', '44444444-4444-4444-4444-444444444444', 'PSI-21001', '7305-21-10458', '7305', 21, '10458', 'maria.ortiz@alumnos.umg.edu.gt', 'Maria Fernanda', 'Ortiz Lopez', 2, 19, 1, TRUE)
 ON CONFLICT (id) DO UPDATE SET
     user_id = EXCLUDED.user_id,
     student_code = EXCLUDED.student_code,
@@ -237,16 +251,73 @@ ON CONFLICT (id) DO UPDATE SET
     is_lab = EXCLUDED.is_lab,
     is_active = EXCLUDED.is_active;
 
--- Course prerequisites reset for Systems program
+-- Courses (Pensum Psicologia Industrial/Organizacional 7305 - 2014)
+INSERT INTO courses (id, program_id, code, name, cycle, credits, hours_per_week, hours_total, is_lab, is_active) VALUES
+(100, 2, '100', 'Filosofia', 1, 5, 5, 80, FALSE, TRUE),
+(101, 2, '101', 'Desarrollo Humano y Profesional', 1, 5, 5, 80, FALSE, TRUE),
+(102, 2, '102', 'Biologia Humana', 1, 5, 5, 80, FALSE, TRUE),
+(103, 2, '103', 'Sociologia General', 1, 5, 5, 80, FALSE, TRUE),
+(104, 2, '104', 'Antropologia General', 2, 5, 5, 80, FALSE, TRUE),
+(105, 2, '105', 'Logica Formal', 2, 5, 5, 80, FALSE, TRUE),
+(106, 2, '106', 'Psicologia General', 2, 5, 5, 80, FALSE, TRUE),
+(107, 2, '107', 'Metodologia de la Investigacion', 2, 5, 5, 80, FALSE, TRUE),
+(108, 2, '108', 'Anatomia y Fisiologia del Sistema Nervioso', 3, 5, 5, 80, FALSE, TRUE),
+(109, 2, '109', 'Estadistica Fundamental', 3, 5, 5, 80, FALSE, TRUE),
+(110, 2, '110', 'Psicologia Evolutiva del Nino y del Adolescente', 3, 5, 5, 80, FALSE, TRUE),
+(111, 2, '111', 'Semiologia Psicologica', 3, 5, 5, 80, FALSE, TRUE),
+(112, 2, '112', 'Psicometria I', 4, 5, 5, 80, FALSE, TRUE),
+(113, 2, '113', 'Teorias de la Personalidad', 4, 5, 5, 80, FALSE, TRUE),
+(114, 2, '114', 'Estadistica Aplicada a la Psicologia', 4, 5, 5, 80, FALSE, TRUE),
+(115, 2, '115', 'Psicologia Evolutiva del Adulto', 4, 5, 5, 80, FALSE, TRUE),
+(116, 2, '116', 'Psicometria II', 5, 5, 5, 80, FALSE, TRUE),
+(117, 2, '117', 'Psicologia del Deporte y la Recreacion', 5, 5, 5, 80, FALSE, TRUE),
+(118, 2, '118', 'Psicologia Social', 5, 5, 5, 80, FALSE, TRUE),
+(119, 2, '119', 'Neurofisiologia', 5, 5, 5, 80, FALSE, TRUE),
+(120, 2, '120', 'Psicologia Clinica', 6, 5, 5, 80, FALSE, TRUE),
+(121, 2, '121', 'Introduccion a la Psicologia Forense', 6, 5, 5, 80, FALSE, TRUE),
+(122, 2, '122', 'Introduccion a la Psicologia Industrial/Organizacional', 6, 5, 5, 80, FALSE, TRUE),
+(123, 2, '123', 'Fundamentos de Informatica', 6, 5, 5, 80, FALSE, TRUE),
+(124, 2, '124', 'Teoria Administrativa', 7, 5, 5, 80, FALSE, TRUE),
+(125, 2, '125', 'Competencias Laborales', 7, 5, 5, 80, FALSE, TRUE),
+(126, 2, '126', 'Planeacion Estrategica de Recursos Humanos', 7, 5, 5, 80, FALSE, TRUE),
+(127, 2, '127', 'Legislacion Laboral', 7, 5, 5, 80, FALSE, TRUE),
+(128, 2, '128', 'Comportamiento Organizacional', 7, 5, 5, 80, FALSE, TRUE),
+(129, 2, '129', 'Analisis y Valuacion de Puestos', 8, 5, 5, 80, FALSE, TRUE),
+(130, 2, '130', 'Desarrollo Organizacional', 8, 5, 5, 80, FALSE, TRUE),
+(131, 2, '131', 'Elaboracion de Proyectos', 8, 5, 5, 80, FALSE, TRUE),
+(132, 2, '132', 'Psicometria Laboral', 8, 5, 5, 80, FALSE, TRUE),
+(133, 2, '133', 'Provision del Talento Humano', 8, 5, 5, 80, FALSE, TRUE),
+(134, 2, '134', 'Desarrollo del Talento Humano', 9, 5, 5, 80, FALSE, TRUE),
+(135, 2, '135', 'Gestion del Desempeno', 9, 5, 5, 80, FALSE, TRUE),
+(136, 2, '136', 'Gestion de Proyectos', 9, 5, 5, 80, FALSE, TRUE),
+(137, 2, '137', 'Practica Supervisada I', 9, 5, 5, 80, FALSE, TRUE),
+(138, 2, '138', 'Elaboracion de Trabajo de Graduacion I', 9, 5, 5, 80, FALSE, TRUE),
+(139, 2, '139', 'Gestion de la Compensacion', 10, 5, 5, 80, FALSE, TRUE),
+(140, 2, '140', 'Gestion de Indicadores Laborales', 10, 5, 5, 80, FALSE, TRUE),
+(141, 2, '141', 'Seguridad Industrial y Salud Ocupacional', 10, 5, 5, 80, FALSE, TRUE),
+(142, 2, '142', 'Practica Supervisada II', 10, 5, 5, 80, FALSE, TRUE),
+(143, 2, '143', 'Elaboracion de Trabajo de Graduacion II', 10, 5, 5, 80, FALSE, TRUE)
+ON CONFLICT (id) DO UPDATE SET
+    program_id = EXCLUDED.program_id,
+    code = EXCLUDED.code,
+    name = EXCLUDED.name,
+    cycle = EXCLUDED.cycle,
+    credits = EXCLUDED.credits,
+    hours_per_week = EXCLUDED.hours_per_week,
+    hours_total = EXCLUDED.hours_total,
+    is_lab = EXCLUDED.is_lab,
+    is_active = EXCLUDED.is_active;
+
+-- Course prerequisites reset for seeded programs
 DELETE FROM course_prerequisites cp
 USING courses c
 WHERE cp.course_id = c.id
-  AND c.program_id = 1;
+  AND c.program_id IN (1, 2);
 
 DELETE FROM course_credit_requirements ccr
 USING courses c
 WHERE ccr.course_id = c.id
-  AND c.program_id = 1;
+  AND c.program_id IN (1, 2);
 
 INSERT INTO course_prerequisites (course_id, prerequisite_course_id) VALUES
 (11, 6),
@@ -270,6 +341,35 @@ INSERT INTO course_prerequisites (course_id, prerequisite_course_id) VALUES
 (49, 43)
 ON CONFLICT (course_id, prerequisite_course_id) DO NOTHING;
 
+INSERT INTO course_prerequisites (course_id, prerequisite_course_id) VALUES
+(108, 102),
+(109, 107),
+(114, 109),
+(115, 110),
+(116, 112),
+(119, 108),
+(120, 118),
+(124, 122),
+(125, 122),
+(126, 122),
+(127, 122),
+(128, 118),
+(129, 126),
+(130, 128),
+(132, 116),
+(133, 126),
+(134, 129),
+(135, 129),
+(136, 131),
+(137, 132),
+(138, 114),
+(139, 135),
+(140, 137),
+(141, 127),
+(142, 137),
+(143, 138)
+ON CONFLICT (course_id, prerequisite_course_id) DO NOTHING;
+
 INSERT INTO course_credit_requirements (course_id, min_approved_credits) VALUES
 (21, 70),
 (26, 80),
@@ -291,7 +391,7 @@ ON CONFLICT DO NOTHING;
 
 -- Course history
 DELETE FROM student_course_history
-WHERE student_id IN ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2');
+WHERE student_id IN ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3');
 
 INSERT INTO student_course_history (student_id, course_id, year, term, grade, status) VALUES
 -- Ana (7mo ciclo con pendientes historicos)
@@ -335,7 +435,52 @@ INSERT INTO student_course_history (student_id, course_id, year, term, grade, st
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 7, 2024, '2024-2', 75.00, 'Passed'),
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 8, 2024, '2024-2', 82.00, 'Passed'),
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 9, 2024, '2024-2', 80.00, 'Passed'),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 10, 2024, '2024-2', 78.00, 'Passed');
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 10, 2024, '2024-2', 78.00, 'Passed'),
+-- Maria (pensum completo Psicologia Industrial 7305 aprobado)
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 100, 2021, '2021-1', 88.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 101, 2021, '2021-1', 84.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 102, 2021, '2021-1', 82.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 103, 2021, '2021-1', 86.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 104, 2021, '2021-2', 85.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 105, 2021, '2021-2', 81.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 106, 2021, '2021-2', 90.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 107, 2021, '2021-2', 89.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 108, 2022, '2022-1', 83.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 109, 2022, '2022-1', 87.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 110, 2022, '2022-1', 91.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 111, 2022, '2022-1', 86.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 112, 2022, '2022-2', 84.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 113, 2022, '2022-2', 82.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 114, 2022, '2022-2', 90.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 115, 2022, '2022-2', 88.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 116, 2023, '2023-1', 89.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 117, 2023, '2023-1', 85.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 118, 2023, '2023-1', 88.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 119, 2023, '2023-1', 84.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 120, 2023, '2023-2', 90.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 121, 2023, '2023-2', 86.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 122, 2023, '2023-2', 91.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 123, 2023, '2023-2', 87.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 124, 2024, '2024-1', 88.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 125, 2024, '2024-1', 85.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 126, 2024, '2024-1', 89.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 127, 2024, '2024-1', 83.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 128, 2024, '2024-1', 90.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 129, 2024, '2024-2', 88.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 130, 2024, '2024-2', 86.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 131, 2024, '2024-2', 87.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 132, 2024, '2024-2', 89.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 133, 2024, '2024-2', 90.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 134, 2025, '2025-1', 91.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 135, 2025, '2025-1', 92.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 136, 2025, '2025-1', 88.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 137, 2025, '2025-1', 90.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 138, 2025, '2025-1', 87.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 139, 2025, '2025-2', 89.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 140, 2025, '2025-2', 91.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 141, 2025, '2025-2', 88.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 142, 2025, '2025-2', 90.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 143, 2025, '2025-2', 93.00, 'Passed');
 
 -- Pricing catalog in GTQ
 UPDATE pricing_catalog
@@ -346,10 +491,36 @@ WHERE service_type IN ('Transfer', 'Enrollment', 'CourseExtra', 'CourseOverdue',
 INSERT INTO pricing_catalog (service_type, program_id, amount, currency, is_active) VALUES
 ('Transfer', NULL, 150.00, 'GTQ', TRUE),
 ('Enrollment', 1, 60.00, 'GTQ', TRUE),
+('Enrollment', 2, 60.00, 'GTQ', TRUE),
 ('CourseExtra', 1, 175.00, 'GTQ', TRUE),
+('CourseExtra', 2, 175.00, 'GTQ', TRUE),
 ('CourseOverdue', 1, 130.00, 'GTQ', TRUE),
+('CourseOverdue', 2, 130.00, 'GTQ', TRUE),
 ('Certificate', NULL, 70.00, 'GTQ', TRUE)
 ON CONFLICT DO NOTHING;
+
+-- Demo certificates by type
+INSERT INTO payment_orders (id, student_id, order_type, reference_id, amount, currency, status, description, created_at, expires_at, paid_at) VALUES
+('70000000-0000-0000-0000-000000000001', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'Certificate', '80000000-0000-0000-0000-000000000001', 70.00, 'GTQ', 'Paid', 'Pago Certificacion de cursos', NOW() - INTERVAL '12 days', NOW() - INTERVAL '10 days', NOW() - INTERVAL '11 days'),
+('70000000-0000-0000-0000-000000000002', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'Certificate', '80000000-0000-0000-0000-000000000002', 70.00, 'GTQ', 'Paid', 'Pago Certificacion de matricula', NOW() - INTERVAL '9 days', NOW() - INTERVAL '7 days', NOW() - INTERVAL '8 days'),
+('70000000-0000-0000-0000-000000000003', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 'Certificate', '80000000-0000-0000-0000-000000000003', 70.00, 'GTQ', 'Paid', 'Pago Cierre de pensum', NOW() - INTERVAL '5 days', NOW() - INTERVAL '3 days', NOW() - INTERVAL '4 days')
+ON CONFLICT (id) DO UPDATE SET
+    status = EXCLUDED.status,
+    description = EXCLUDED.description,
+    amount = EXCLUDED.amount,
+    currency = EXCLUDED.currency,
+    paid_at = EXCLUDED.paid_at;
+
+INSERT INTO certificates (id, student_id, payment_order_id, purpose, status, verification_code, pdf_path, metadata, created_at, generated_at, sent_at) VALUES
+('80000000-0000-0000-0000-000000000001', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', '70000000-0000-0000-0000-000000000001', 'Certificacion de cursos', 'Sent', 'UMG-CERT-COURSES-0001', NULL, '{"certificateType":"courses","source":"seed.sql"}'::jsonb, NOW() - INTERVAL '12 days', NOW() - INTERVAL '11 days', NOW() - INTERVAL '11 days'),
+('80000000-0000-0000-0000-000000000002', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', '70000000-0000-0000-0000-000000000002', 'Certificacion de matricula', 'Sent', 'UMG-CERT-ENROLL-0002', NULL, '{"certificateType":"enrollment","source":"seed.sql"}'::jsonb, NOW() - INTERVAL '9 days', NOW() - INTERVAL '8 days', NOW() - INTERVAL '8 days'),
+('80000000-0000-0000-0000-000000000003', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', '70000000-0000-0000-0000-000000000003', 'Cierre de pensum', 'Sent', 'UMG-CERT-PENSUM-0003', NULL, '{"certificateType":"pensum-closure","source":"seed.sql"}'::jsonb, NOW() - INTERVAL '5 days', NOW() - INTERVAL '4 days', NOW() - INTERVAL '4 days')
+ON CONFLICT (id) DO UPDATE SET
+    status = EXCLUDED.status,
+    purpose = EXCLUDED.purpose,
+    metadata = EXCLUDED.metadata,
+    generated_at = EXCLUDED.generated_at,
+    sent_at = EXCLUDED.sent_at;
 
 -- Audit seed execution
 INSERT INTO audit_logs (user_id, action, entity_name, entity_id, details, ip_address)

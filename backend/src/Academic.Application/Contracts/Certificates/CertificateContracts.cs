@@ -4,6 +4,12 @@ public sealed record CreateCertificateDto(string Purpose);
 
 public sealed record GenerateCertificateDto(bool SendEmail, bool IncludeQr);
 
+public sealed record CertificateTypeDto(
+    string Code,
+    string Name,
+    string Description,
+    bool RequiresFullPensum);
+
 public sealed record CertificateCreatedDto(
     Guid CertificateId,
     Guid PaymentOrderId,

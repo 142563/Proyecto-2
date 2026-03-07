@@ -29,10 +29,12 @@ Solución full-stack para gestión académica de la Universidad Mariano Gálvez 
 - `db/schema.idempotent.sql` generado desde migraciones para despliegues incrementales.
 
 ## 5. Modelo académico UMG (Fase 1)
-- Carrera: **Ingeniería en Sistemas de Información y Ciencias de la Computación**.
-- Pensum 2014 completo (50 cursos, ciclos, créditos, lab, prerequisitos por curso y por créditos).
+- Carrera 1: **Ingeniería en Sistemas de Información y Ciencias de la Computación**.
+- Carrera 2: **Licenciatura en Psicología Industrial/Organizacional** (Pensum `7305`, año 2014).
+- Pensum Sistemas 2014 completo (50 cursos, ciclos, créditos, lab, prerequisitos por curso y por créditos).
+- Pensum Psicología Industrial 7305 (ciclos 1-10, cursos `100` a `143`, prerequisitos del documento oficial).
 - Carnet real modelado: `NNNN-YY-NNNN|NNNNN`.
-- Catálogo `carnet_prefix_catalog` para inferir sede/plan/carrera (incluye `0908` Escuintla sábado).
+- Catálogo `carnet_prefix_catalog` para inferir sede/plan/carrera (incluye `0908` Escuintla sábado y `7305` Mazatenango sábado).
 - Traslados con modalidad `Presencial` o `Virtual`.
 
 ## 6. Seguridad
@@ -62,7 +64,9 @@ Solución full-stack para gestión académica de la Universidad Mariano Gálvez 
 - Crea asignación + orden de pago GTQ con expiración.
 
 ### Certificación digital
+- Tipos implementados: cursos, matrícula, pasantías y cierre de pensum.
 - Solicitud genera orden en GTQ.
+- Regla crítica: `Cierre de pensum` solo si el estudiante tiene el 100% de cursos activos de su programa aprobados.
 - PDF solo cuando pago está en `Paid`.
 - Código único de verificación y envío opcional por email.
 

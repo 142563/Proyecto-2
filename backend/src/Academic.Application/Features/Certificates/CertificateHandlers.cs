@@ -15,18 +15,29 @@ public sealed class CreateCertificateCommandHandler(ICertificateService certific
     {
         if (!currentUser.StudentId.HasValue)
         {
-            return Task.FromResult(Result<CertificateCreatedDto>.Failure("forbidden", "Only students can request certificates."));
+            return Task.FromResult(Result<CertificateCreatedDto>.Failure("forbidden", "Solo los estudiantes pueden solicitar certificaciones."));
         }
 
         if (string.IsNullOrWhiteSpace(request.Request.Purpose))
         {
             return Task.FromResult(Result<CertificateCreatedDto>.ValidationFailure(new Dictionary<string, string[]>
             {
-                ["purpose"] = ["Purpose is required."]
+                ["purpose"] = ["Debe seleccionar el tipo de certificación."]
             }));
         }
 
         return certificateService.CreateAsync(currentUser.StudentId.Value, request.Request, cancellationToken);
+    }
+}
+
+public sealed record GetCertificateTypesQuery : IRequest<Result<IReadOnlyList<CertificateTypeDto>>>;
+
+public sealed class GetCertificateTypesQueryHandler(ICertificateService certificateService)
+    : IRequestHandler<GetCertificateTypesQuery, Result<IReadOnlyList<CertificateTypeDto>>>
+{
+    public Task<Result<IReadOnlyList<CertificateTypeDto>>> Handle(GetCertificateTypesQuery request, CancellationToken cancellationToken)
+    {
+        return certificateService.GetTypesAsync(cancellationToken);
     }
 }
 

@@ -131,3 +131,10 @@ export interface CertificateSummaryResponse {
   generatedAt?: string | null;
   sentAt?: string | null;
 }
+
+export interface CertificateTypeResponse {
+  code: string;
+  name: string;
+  description: string;
+  requiresFullPensum: boolean;
+}

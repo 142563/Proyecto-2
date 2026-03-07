@@ -4,7 +4,7 @@ import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { API_BASE_URL } from '../../core/config/api.config';
 import { StatusBadgeComponent } from '../../shared/components/status-badge.component';
-import { ApiEnvelope, CertificateSummaryResponse } from '../../shared/models/api.models';
+import { ApiEnvelope, CertificateSummaryResponse, CertificateTypeResponse } from '../../shared/models/api.models';
 
 @Component({
   standalone: true,
@@ -15,8 +15,17 @@ import { ApiEnvelope, CertificateSummaryResponse } from '../../shared/models/api
       <h2 class="section-title text-lg">Certificación Digital</h2>
 
       <div class="mt-4 space-y-3">
-        <input class="input-control" [(ngModel)]="purpose" placeholder="Motivo del certificado" />
-        <button class="btn-primary px-4 py-2" (click)="requestCertificate()">Solicitar (genera orden)</button>
+        <label class="text-xs font-semibold uppercase tracking-wide text-[color:var(--umg-navy-700)]">Tipo de certificación</label>
+        <select class="input-control" [(ngModel)]="selectedTypeCode">
+          <option *ngFor="let type of certificateTypes" [value]="type.code">{{ type.name }}</option>
+        </select>
+        <p *ngIf="selectedType" class="text-sm text-muted">{{ selectedType.description }}</p>
+        <p *ngIf="selectedType?.requiresFullPensum" class="text-sm text-amber-700">
+          Requiere tener el pensum completo aprobado.
+        </p>
+        <button class="btn-primary px-4 py-2" [disabled]="!selectedTypeCode" (click)="requestCertificate()">
+          Solicitar (genera orden)
+        </button>
       </div>
 
       <div class="mt-5 border-t border-slate-200 pt-4" *ngIf="certificateId">
@@ -75,8 +84,9 @@ export class CertificatesPage {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = API_BASE_URL;
 
+  certificateTypes: CertificateTypeResponse[] = [];
   certificates: CertificateSummaryResponse[] = [];
-  purpose = 'Certificado de estudios';
+  selectedTypeCode = '';
   certificateId = '';
   verificationCode = '';
   verifyCode = '';
@@ -84,7 +94,25 @@ export class CertificatesPage {
   error = '';
 
   constructor() {
+    this.loadCertificateTypes();
     this.loadMyCertificates();
+  }
+
+  get selectedType(): CertificateTypeResponse | undefined {
+    return this.certificateTypes.find((type) => type.code === this.selectedTypeCode);
+  }
+
+  loadCertificateTypes(): void {
+    this.http.get<ApiEnvelope<CertificateTypeResponse[]>>(`${this.baseUrl}/certificates/types`).subscribe((response) => {
+      if (!response.success) {
+        return;
+      }
+
+      this.certificateTypes = response.data;
+      if (!this.selectedTypeCode && this.certificateTypes.length > 0) {
+        this.selectedTypeCode = this.certificateTypes[0].code;
+      }
+    });
   }
 
   loadMyCertificates(): void {
@@ -96,10 +124,15 @@ export class CertificatesPage {
   requestCertificate(): void {
     this.error = '';
     this.message = '';
+    if (!this.selectedTypeCode) {
+      this.error = 'Debes seleccionar un tipo de certificación.';
+      return;
+    }
+
     this.http
       .post<ApiEnvelope<{ certificateId: string; paymentOrderId: string; amount: number; currency: string; verificationCode: string }>>(
         `${this.baseUrl}/certificates`,
-        { purpose: this.purpose }
+        { purpose: this.selectedTypeCode }
       )
       .subscribe({
         next: (response) => {
@@ -114,7 +147,7 @@ export class CertificatesPage {
           this.loadMyCertificates();
         },
         error: (error: HttpErrorResponse) => {
-          this.error = error.error?.error?.message ?? 'Error de conexión.';
+          this.error = this.extractErrorMessage(error);
         }
       });
   }
@@ -140,7 +173,7 @@ export class CertificatesPage {
           this.loadMyCertificates();
         },
         error: (error: HttpErrorResponse) => {
-          this.error = error.error?.error?.message ?? 'Error de conexión.';
+          this.error = this.extractErrorMessage(error);
         }
       });
   }
@@ -180,7 +213,7 @@ export class CertificatesPage {
         this.loadMyCertificates();
       },
       error: (error: HttpErrorResponse) => {
-        this.error = error.error?.error?.message ?? 'Error de conexión.';
+        this.error = this.extractErrorMessage(error);
       }
     });
   }
@@ -196,8 +229,25 @@ export class CertificatesPage {
         this.message = response.data.message;
       },
       error: (error: HttpErrorResponse) => {
-        this.error = error.error?.error?.message ?? 'Error de conexión.';
+        this.error = this.extractErrorMessage(error);
       }
     });
+  }
+
+  private extractErrorMessage(error: HttpErrorResponse): string {
+    const explicitMessage = error.error?.error?.message ?? error.error?.message;
+    if (explicitMessage) {
+      return explicitMessage;
+    }
+
+    const validationErrors = error.error?.validationErrors as Record<string, string[]> | undefined;
+    if (validationErrors) {
+      const firstKey = Object.keys(validationErrors)[0];
+      if (firstKey && validationErrors[firstKey]?.length) {
+        return validationErrors[firstKey][0];
+      }
+    }
+
+    return 'Error de conexión.';
   }
 }

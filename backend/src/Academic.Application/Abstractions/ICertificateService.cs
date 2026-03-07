@@ -6,6 +6,7 @@ namespace Academic.Application.Abstractions;
 
 public interface ICertificateService
 {
+    Task<Result<IReadOnlyList<CertificateTypeDto>>> GetTypesAsync(CancellationToken cancellationToken);
     Task<Result<CertificateCreatedDto>> CreateAsync(Guid studentId, CreateCertificateDto request, CancellationToken cancellationToken);
     Task<Result<CertificateDto>> GenerateAsync(Guid actorStudentId, Guid certificateId, GenerateCertificateDto request, CancellationToken cancellationToken);
     Task<Result<FilePayloadDto>> DownloadAsync(Guid actorStudentId, Guid certificateId, CancellationToken cancellationToken);

@@ -11,6 +11,14 @@ namespace Academic.Api.Controllers;
 public sealed class CertificatesController(IMediator mediator) : ControllerBase
 {
     [Authorize(Roles = "Student")]
+    [HttpGet("types")]
+    public async Task<ActionResult> Types(CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetCertificateTypesQuery(), cancellationToken);
+        return this.ToActionResult(result);
+    }
+
+    [Authorize(Roles = "Student")]
     [HttpGet("my")]
     public async Task<ActionResult> My(CancellationToken cancellationToken)
     {
