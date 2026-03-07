@@ -47,6 +47,32 @@ public sealed class AcademicOperationsService(
     private readonly AcademicOptions _academicOptions = academicOptions.Value;
     private readonly IHostEnvironment _hostEnvironment = hostEnvironment;
     private readonly ILogger<AcademicOperationsService> _logger = logger;
+    private static readonly string[] ApprovedHistoryStatuses =
+    [
+        "passed",
+        "approved",
+        "aprobado",
+        "aprobada",
+        "ganado",
+        "ganada",
+        "completed",
+        "completado",
+        "completada",
+        "exonerado"
+    ];
+    private static readonly string[] FailedHistoryStatuses =
+    [
+        "failed",
+        "reprobado",
+        "reprobada",
+        "desaprobado",
+        "desaprobada",
+        "perdido",
+        "perdida",
+        "no_aprobado",
+        "no aprobado",
+        "unapproved"
+    ];
     private static readonly IReadOnlyList<CertificateTypeDefinition> CertificateTypes =
     [
         new("courses", "Certificacion de cursos", "Detalle de cursos aprobados por el estudiante.", false),
@@ -157,9 +183,9 @@ public sealed class AcademicOperationsService(
             campusName ??= prefix.Campus.Name;
             shiftName ??= prefix.Shift.Name;
 
-            var maxPassedCycle = await _dbContext.StudentCourseHistories
-                .AsNoTracking()
-                .Where(x => x.StudentId == user.Student.Id && x.Status == "Passed")
+            var maxPassedCycle = await BuildApprovedHistoryQuery(
+                    _dbContext.StudentCourseHistories.AsNoTracking(),
+                    user.Student.Id)
                 .Join(_dbContext.Courses.AsNoTracking(),
                     history => history.CourseId,
                     course => course.Id,
@@ -507,9 +533,9 @@ public sealed class AcademicOperationsService(
         }
 
         var overdueIds = await GetOverdueIdsAsync(studentId, cancellationToken);
-        var approvedCourseIds = await _dbContext.StudentCourseHistories
-            .AsNoTracking()
-            .Where(x => x.StudentId == studentId && EF.Functions.ILike(x.Status, "passed"))
+        var approvedCourseIds = await BuildApprovedHistoryQuery(
+                _dbContext.StudentCourseHistories.AsNoTracking(),
+                studentId)
             .Select(x => x.CourseId)
             .Distinct()
             .ToListAsync(cancellationToken);
@@ -517,7 +543,7 @@ public sealed class AcademicOperationsService(
 
         var coursesRaw = await _dbContext.Courses
             .AsNoTracking()
-            .Include(c => c.Courses)
+            .Include(c => c.PrerequisiteCourses)
             .Include(c => c.CourseCreditRequirements)
             .Where(x => x.ProgramId == student.ProgramId && x.IsActive)
             .OrderBy(x => x.Cycle)
@@ -526,7 +552,7 @@ public sealed class AcademicOperationsService(
 
         var courses = coursesRaw.Select(x =>
         {
-            var prerequisiteCodes = x.Courses
+            var prerequisiteCodes = x.PrerequisiteCourses
                 .Select(c => c.Code)
                 .Distinct()
                 .OrderBy(code => code)
@@ -704,7 +730,7 @@ public sealed class AcademicOperationsService(
         }
 
         var selectedCourses = await _dbContext.Courses
-            .Include(c => c.Courses)
+            .Include(c => c.PrerequisiteCourses)
             .Include(c => c.CourseCreditRequirements)
             .Where(x => uniqueIds.Contains(x.Id) && x.ProgramId == student.ProgramId && x.IsActive)
             .ToListAsync(cancellationToken);
@@ -734,8 +760,9 @@ public sealed class AcademicOperationsService(
             }
         }
 
-        var passedCourses = await _dbContext.StudentCourseHistories
-            .Where(x => x.StudentId == studentId && EF.Functions.ILike(x.Status, "passed"))
+        var passedCourses = await BuildApprovedHistoryQuery(
+                _dbContext.StudentCourseHistories,
+                studentId)
             .Join(_dbContext.Courses.AsNoTracking(),
                 history => history.CourseId,
                 course => course.Id,
@@ -752,7 +779,7 @@ public sealed class AcademicOperationsService(
 
         foreach (var course in selectedCourses)
         {
-            var prerequisiteIds = course.Courses.Select(x => x.Id).Distinct().ToList();
+            var prerequisiteIds = course.PrerequisiteCourses.Select(x => x.Id).Distinct().ToList();
             var minCredits = course.CourseCreditRequirements
                 .Select(x => x.MinApprovedCredits)
                 .DefaultIfEmpty((short)0)
@@ -764,7 +791,16 @@ public sealed class AcademicOperationsService(
                 var unmet = prerequisiteIds.Where(id => !passedCourseIdSet.Contains(id)).ToList();
                 if (unmet.Count > 0)
                 {
-                    return Result<EnrollmentResultDto>.Failure("business_rule", $"No cumples los prerrequisitos para el curso {course.Code}.");
+                    var missingCodes = course.PrerequisiteCourses
+                        .Where(x => unmet.Contains(x.Id))
+                        .Select(x => x.Code)
+                        .Distinct()
+                        .OrderBy(x => x)
+                        .ToList();
+                    var missingDetail = missingCodes.Count > 0
+                        ? $" Faltan: {string.Join(", ", missingCodes)}."
+                        : string.Empty;
+                    return Result<EnrollmentResultDto>.Failure("business_rule", $"No cumples los prerrequisitos para el curso {course.Code}.{missingDetail}");
                 }
 
                 if (approvedCredits < minCredits)
@@ -780,7 +816,16 @@ public sealed class AcademicOperationsService(
         var approvedSelections = uniqueIds.Where(id => passedCourseIdSet.Contains(id)).ToList();
         if (approvedSelections.Count > 0)
         {
-            return Result<EnrollmentResultDto>.Failure("business_rule", "No puedes asignarte cursos que ya tienes aprobados.");
+            var approvedCodes = selectedCourses
+                .Where(x => approvedSelections.Contains(x.Id))
+                .Select(x => x.Code)
+                .Distinct()
+                .OrderBy(x => x)
+                .ToList();
+            var approvedDetail = approvedCodes.Count > 0
+                ? $" Cursos ya aprobados: {string.Join(", ", approvedCodes)}."
+                : string.Empty;
+            return Result<EnrollmentResultDto>.Failure("business_rule", $"No puedes asignarte cursos que ya tienes aprobados.{approvedDetail}");
         }
 
         var courseExtraPricing = await GetServicePricingAsync("CourseExtra", student.ProgramId, cancellationToken);
@@ -918,6 +963,24 @@ public sealed class AcademicOperationsService(
         return Result<EnrollmentCancellationDto>.Success(new EnrollmentCancellationDto(enrollment.Id, enrollment.Status, enrollment.UpdatedAt));
     }
 
+    public async Task<Result<FilePayloadDto>> DownloadEnrollmentDireAsync(
+        Guid studentId,
+        Guid enrollmentId,
+        CancellationToken cancellationToken)
+    {
+        var direResult = await EnsureEnrollmentDireGeneratedAsync(enrollmentId, studentId, cancellationToken);
+        if (!direResult.IsSuccess || direResult.Value is null)
+        {
+            return Result<FilePayloadDto>.Failure(
+                direResult.Error?.Code ?? "not_found",
+                direResult.Error?.Message ?? "No fue posible generar el DIRE de inscripción.");
+        }
+
+        var artifact = direResult.Value;
+        var bytes = await File.ReadAllBytesAsync(artifact.FullPath, cancellationToken);
+        return Result<FilePayloadDto>.Success(new FilePayloadDto(bytes, "application/pdf", artifact.FileName));
+    }
+
     public async Task<Result<IReadOnlyList<PaymentOrderDto>>> GetMyPaymentsAsync(Guid studentId, CancellationToken cancellationToken)
     {
         await ReconcileExpiredPendingAsync(studentId, cancellationToken);
@@ -1016,6 +1079,7 @@ public sealed class AcademicOperationsService(
         }
 
         MockCheckoutCertificateDto? certificate = null;
+        MockCheckoutEnrollmentDireDto? enrollmentDire = null;
         if (string.Equals(payment.OrderType, "Certificate", StringComparison.OrdinalIgnoreCase))
         {
             var certificateGeneration = await TryGenerateCertificateFromPaymentAsync(studentId, payment.Id, cancellationToken);
@@ -1027,6 +1091,17 @@ public sealed class AcademicOperationsService(
             }
 
             certificate = certificateGeneration.Value;
+        }
+        else if (string.Equals(payment.OrderType, "Enrollment", StringComparison.OrdinalIgnoreCase))
+        {
+            var direGeneration = await EnsureEnrollmentDireGeneratedAsync(payment.ReferenceId, studentId, cancellationToken);
+            if (direGeneration.IsSuccess && direGeneration.Value is not null)
+            {
+                enrollmentDire = new MockCheckoutEnrollmentDireDto(
+                    payment.ReferenceId,
+                    direGeneration.Value.DireNumber,
+                    File.Exists(direGeneration.Value.FullPath));
+            }
         }
 
         var maskedCard = MaskCardNumber(request.CardNumber);
@@ -1045,7 +1120,7 @@ public sealed class AcademicOperationsService(
             null,
             cancellationToken);
 
-        return Result<MockCheckoutResultDto>.Success(new MockCheckoutResultDto(paidResult.Value, certificate));
+        return Result<MockCheckoutResultDto>.Success(new MockCheckoutResultDto(paidResult.Value, certificate, enrollmentDire));
     }
 
     public Task<Result<IReadOnlyList<CertificateTypeDto>>> GetTypesAsync(CancellationToken cancellationToken)
@@ -1102,9 +1177,9 @@ public sealed class AcademicOperationsService(
                 return Result<CertificateCreatedDto>.Failure("config_error", "No hay cursos activos configurados para este programa.");
             }
 
-            var approvedIds = await _dbContext.StudentCourseHistories
-                .AsNoTracking()
-                .Where(x => x.StudentId == studentId && EF.Functions.ILike(x.Status, "passed"))
+            var approvedIds = await BuildApprovedHistoryQuery(
+                    _dbContext.StudentCourseHistories.AsNoTracking(),
+                    studentId)
                 .Select(x => x.CourseId)
                 .Distinct()
                 .ToListAsync(cancellationToken);
@@ -1211,9 +1286,9 @@ public sealed class AcademicOperationsService(
             return Result<CertificateDto>.Failure("business_rule", "Certificate can only be generated after payment is confirmed.");
         }
 
-        var approvedCourses = await _dbContext.StudentCourseHistories
-            .AsNoTracking()
-            .Where(x => x.StudentId == actorStudentId && x.Status == "Passed")
+        var approvedCourses = await BuildApprovedHistoryQuery(
+                _dbContext.StudentCourseHistories.AsNoTracking(),
+                actorStudentId)
             .Include(x => x.Course)
             .OrderBy(x => x.Course.Code)
             .Select(x => x.Course.Code + " - " + x.Course.Name)
@@ -1567,14 +1642,12 @@ public sealed class AcademicOperationsService(
 
     private async Task<HashSet<int>> GetOverdueIdsAsync(Guid studentId, CancellationToken cancellationToken)
     {
-        var failed = await _dbContext.StudentCourseHistories
-            .Where(x => x.StudentId == studentId && EF.Functions.ILike(x.Status, "failed"))
+        var failed = await BuildFailedHistoryQuery(_dbContext.StudentCourseHistories, studentId)
             .Select(x => x.CourseId)
             .Distinct()
             .ToListAsync(cancellationToken);
 
-        var passed = await _dbContext.StudentCourseHistories
-            .Where(x => x.StudentId == studentId && EF.Functions.ILike(x.Status, "passed"))
+        var passed = await BuildApprovedHistoryQuery(_dbContext.StudentCourseHistories, studentId)
             .Select(x => x.CourseId)
             .Distinct()
             .ToListAsync(cancellationToken);
@@ -1757,6 +1830,18 @@ public sealed class AcademicOperationsService(
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
+        if (payment.OrderType == "Enrollment")
+        {
+            var direGeneration = await EnsureEnrollmentDireGeneratedAsync(payment.ReferenceId, payment.StudentId, cancellationToken);
+            if (!direGeneration.IsSuccess)
+            {
+                _logger.LogWarning(
+                    "Payment {PaymentId} was marked as paid, but DIRE generation failed: {Reason}",
+                    payment.Id,
+                    direGeneration.Error?.Message ?? "Unknown error");
+            }
+        }
+
         await _auditLogService.LogAsync(
             actedByUserId,
             "PaymentMarkedPaid",
@@ -1822,6 +1907,93 @@ public sealed class AcademicOperationsService(
             certificate.Status,
             certificate.VerificationCode,
             !string.IsNullOrWhiteSpace(certificate.PdfPath) && File.Exists(certificate.PdfPath)));
+    }
+
+    private async Task<Result<EnrollmentDireArtifact>> EnsureEnrollmentDireGeneratedAsync(
+        Guid enrollmentId,
+        Guid? studentId,
+        CancellationToken cancellationToken)
+    {
+        var enrollment = await _dbContext.Enrollments
+            .AsNoTracking()
+            .Include(x => x.Student)
+                .ThenInclude(x => x.Program)
+            .Include(x => x.Student)
+                .ThenInclude(x => x.CurrentCampus)
+            .Include(x => x.Student)
+                .ThenInclude(x => x.CurrentShift)
+            .Include(x => x.EnrollmentCourses)
+                .ThenInclude(x => x.Course)
+            .Include(x => x.EnrollmentCourses)
+                .ThenInclude(x => x.Shift)
+            .FirstOrDefaultAsync(x => x.Id == enrollmentId, cancellationToken);
+
+        if (enrollment is null)
+        {
+            return Result<EnrollmentDireArtifact>.Failure("not_found", "No se encontró la asignación.");
+        }
+
+        if (studentId.HasValue && enrollment.StudentId != studentId.Value)
+        {
+            return Result<EnrollmentDireArtifact>.Failure("forbidden", "La asignación no pertenece al estudiante actual.");
+        }
+
+        if (enrollment.Status != DomainStatuses.Enrollment.Confirmed)
+        {
+            return Result<EnrollmentDireArtifact>.Failure("business_rule", "El DIRE se genera cuando la asignación está confirmada.");
+        }
+
+        var paymentOrder = await _dbContext.PaymentOrders
+            .AsNoTracking()
+            .Where(x => x.OrderType == "Enrollment" && x.ReferenceId == enrollmentId)
+            .OrderByDescending(x => x.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (paymentOrder is null || paymentOrder.Status != DomainStatuses.Payment.Paid)
+        {
+            return Result<EnrollmentDireArtifact>.Failure("business_rule", "No existe pago confirmado para la asignación.");
+        }
+
+        var artifact = BuildEnrollmentDireArtifact(enrollment);
+        if (File.Exists(artifact.FullPath))
+        {
+            return Result<EnrollmentDireArtifact>.Success(artifact);
+        }
+
+        var model = new EnrollmentDirePdfModel(
+            artifact.DireNumber,
+            DateTime.UtcNow,
+            $"{enrollment.Student.FirstName} {enrollment.Student.LastName}".Trim(),
+            enrollment.Student.Carnet,
+            enrollment.Student.StudentCode,
+            enrollment.Student.Program.Name,
+            enrollment.Student.CurrentCampus?.Name ?? "Sede no definida",
+            ToShiftLabel(enrollment.Student.CurrentShift?.Name),
+            enrollment.EnrollmentType,
+            enrollment.TotalAmount,
+            paymentOrder.Currency,
+            enrollment.EnrollmentCourses
+                .OrderBy(x => x.Course.Code)
+                .Select(x => new EnrollmentDireCourseLine(
+                    x.Course.Code,
+                    x.Course.Name,
+                    ToShiftLabel(x.Shift.Name),
+                    x.IsOverdue ? "Atrasado" : "Regular"))
+                .ToList());
+
+        var bytes = _pdfService.BuildEnrollmentDirePdf(model);
+        await File.WriteAllBytesAsync(artifact.FullPath, bytes, cancellationToken);
+
+        await _auditLogService.LogAsync(
+            enrollment.Student.UserId,
+            "EnrollmentDireGenerated",
+            "Enrollment",
+            enrollment.Id.ToString(),
+            new { artifact.DireNumber, artifact.FileName },
+            null,
+            cancellationToken);
+
+        return Result<EnrollmentDireArtifact>.Success(artifact);
     }
 
     private static Dictionary<string, string[]> ValidateMockCard(MockCheckoutRequestDto request)
@@ -1931,6 +2103,41 @@ public sealed class AcademicOperationsService(
             payment.PaidAt,
             payment.CancelledAt);
 
+    private EnrollmentDireArtifact BuildEnrollmentDireArtifact(Enrollment enrollment)
+    {
+        var suffix = enrollment.Id.ToString("N")[..8].ToUpperInvariant();
+        var sanitizedCarnet = new string((enrollment.Student.Carnet ?? string.Empty)
+            .Where(character => char.IsLetterOrDigit(character) || character == '-')
+            .ToArray());
+        if (string.IsNullOrWhiteSpace(sanitizedCarnet))
+        {
+            sanitizedCarnet = enrollment.Student.StudentCode;
+        }
+
+        var direNumber = $"DIRE-{sanitizedCarnet}-{enrollment.CreatedAt:yyyy}-{suffix}";
+        var fileName = $"{direNumber}.pdf";
+        var outputDirectory = Path.Combine(_hostEnvironment.ContentRootPath, _academicOptions.EnrollmentDireStoragePath);
+        Directory.CreateDirectory(outputDirectory);
+        var fullPath = Path.Combine(outputDirectory, fileName);
+        return new EnrollmentDireArtifact(direNumber, fileName, fullPath);
+    }
+
+    private static IQueryable<StudentCourseHistory> BuildApprovedHistoryQuery(
+        IQueryable<StudentCourseHistory> source,
+        Guid studentId)
+        => source.Where(x =>
+            x.StudentId == studentId &&
+            x.Status != null &&
+            ApprovedHistoryStatuses.Contains(x.Status.Trim().ToLower()));
+
+    private static IQueryable<StudentCourseHistory> BuildFailedHistoryQuery(
+        IQueryable<StudentCourseHistory> source,
+        Guid studentId)
+        => source.Where(x =>
+            x.StudentId == studentId &&
+            x.Status != null &&
+            FailedHistoryStatuses.Contains(x.Status.Trim().ToLower()));
+
     private static bool IsPaymentExpired(PaymentOrder payment)
         => payment.ExpiresAt <= DateTime.UtcNow;
 
@@ -1977,6 +2184,12 @@ public sealed class AcademicOperationsService(
             "domingo" => "Sunday",
             _ => value.Trim()
         };
+    }
+
+    private static string ToShiftLabel(string? shiftName)
+    {
+        var normalized = NormalizeShift(shiftName ?? "Saturday");
+        return normalized == "Sunday" ? "Domingo" : "Sabado";
     }
 
     private static CertificateTypeDefinition? ResolveCertificateType(string value)
@@ -2036,6 +2249,7 @@ public sealed class AcademicOperationsService(
         return $"CERT-{DateTime.UtcNow:yyyyMMdd}-{random}";
     }
 
+    private sealed record EnrollmentDireArtifact(string DireNumber, string FileName, string FullPath);
     private sealed record ServicePricing(decimal Amount, string Currency);
 }
 

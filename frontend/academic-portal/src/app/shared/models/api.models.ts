@@ -67,9 +67,16 @@ export interface MockCheckoutCertificateResponse {
   pdfAvailable: boolean;
 }
 
+export interface MockCheckoutEnrollmentDireResponse {
+  enrollmentId: string;
+  direNumber: string;
+  pdfAvailable: boolean;
+}
+
 export interface MockCheckoutResponse {
   payment: PaymentOrderResponse;
   certificate?: MockCheckoutCertificateResponse | null;
+  enrollmentDire?: MockCheckoutEnrollmentDireResponse | null;
 }
 
 export interface TransferResponse {

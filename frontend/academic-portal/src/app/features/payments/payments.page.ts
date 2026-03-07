@@ -210,6 +210,12 @@ export class PaymentsPage {
             this.message += ` Certificado ${generatedCertificate.certificateId} generado y listo para descarga.`;
           }
 
+          const enrollmentDire = response.data.enrollmentDire;
+          if (enrollmentDire?.pdfAvailable) {
+            this.downloadEnrollmentDire(enrollmentDire.enrollmentId);
+            this.message += ` DIRE de inscripción ${enrollmentDire.direNumber} generado y descargado.`;
+          }
+
           this.checkoutPayment = null;
           this.loadPayments();
           if (this.auth.me()?.role === 'Admin') {
@@ -230,6 +236,19 @@ export class PaymentsPage {
         const anchor = document.createElement('a');
         anchor.href = url;
         anchor.download = `certificate-${certificateId}.pdf`;
+        anchor.click();
+        window.URL.revokeObjectURL(url);
+      }
+    });
+  }
+
+  private downloadEnrollmentDire(enrollmentId: string): void {
+    this.http.get(`${this.baseUrl}/enrollments/${enrollmentId}/dire`, { responseType: 'blob' }).subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `dire-inscripcion-${enrollmentId}.pdf`;
         anchor.click();
         window.URL.revokeObjectURL(url);
       }

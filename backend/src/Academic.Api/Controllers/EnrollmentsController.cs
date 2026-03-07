@@ -31,4 +31,16 @@ public sealed class EnrollmentsController(IMediator mediator) : ControllerBase
         var result = await mediator.Send(new CancelEnrollmentCommand(id), cancellationToken);
         return this.ToActionResult(result);
     }
+
+    [HttpGet("{id:guid}/dire")]
+    public async Task<ActionResult> DownloadDire([FromRoute] Guid id, CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new DownloadEnrollmentDireQuery(id), cancellationToken);
+        if (!result.IsSuccess || result.Value is null)
+        {
+            return this.ToActionResult(result);
+        }
+
+        return File(result.Value.Content, result.Value.ContentType, result.Value.FileName);
+    }
 }

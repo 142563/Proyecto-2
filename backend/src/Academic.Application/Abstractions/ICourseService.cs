@@ -1,4 +1,5 @@
 using Academic.Application.Common;
+using Academic.Application.Contracts.Common;
 using Academic.Application.Contracts.Courses;
 
 namespace Academic.Application.Abstractions;
@@ -10,4 +11,5 @@ public interface ICourseService
     Task<Result<IReadOnlyList<EnrollmentSummaryDto>>> GetMyEnrollmentsAsync(Guid studentId, CancellationToken cancellationToken);
     Task<Result<EnrollmentResultDto>> CreateEnrollmentAsync(Guid studentId, CreateEnrollmentDto request, CancellationToken cancellationToken);
     Task<Result<EnrollmentCancellationDto>> CancelEnrollmentAsync(Guid studentId, Guid enrollmentId, CancellationToken cancellationToken);
+    Task<Result<FilePayloadDto>> DownloadEnrollmentDireAsync(Guid studentId, Guid enrollmentId, CancellationToken cancellationToken);
 }

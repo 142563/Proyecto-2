@@ -34,14 +34,6 @@ import {
         </button>
       </div>
 
-      <div class="mt-5 border-t border-slate-200 pt-4">
-        <h3 class="font-semibold">Verificar certificado</h3>
-        <div class="mt-2 flex gap-2">
-          <input class="input-control" [(ngModel)]="verifyCode" placeholder="Código de verificación" />
-          <button class="btn-secondary px-4 py-2" (click)="verify()">Verificar</button>
-        </div>
-      </div>
-
       <div *ngIf="checkoutCertificate" class="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
         <h3 class="text-sm font-semibold uppercase tracking-wide text-[color:var(--umg-navy-700)]">Pago con tarjeta (demo)</h3>
         <p class="mt-1 text-sm text-muted">
@@ -137,7 +129,6 @@ export class CertificatesPage {
   certificateTypes: CertificateTypeResponse[] = [];
   certificates: CertificateSummaryResponse[] = [];
   selectedTypeCode = '';
-  verifyCode = '';
   checkoutCertificate: CertificateSummaryResponse | null = null;
   checkoutLoading = false;
   checkout: MockCheckoutRequest = {
@@ -312,22 +303,6 @@ export class CertificatesPage {
 
         this.message = 'Solicitud de certificación cancelada.';
         this.loadMyCertificates();
-      },
-      error: (error: HttpErrorResponse) => {
-        this.error = this.extractErrorMessage(error);
-      }
-    });
-  }
-
-  verify(): void {
-    this.http.get<ApiEnvelope<{ message: string }>>(`${this.baseUrl}/certificates/verify/${this.verifyCode}`).subscribe({
-      next: (response) => {
-        if (!response.success) {
-          this.error = response.error?.message ?? 'No se pudo verificar.';
-          return;
-        }
-
-        this.message = response.data.message;
       },
       error: (error: HttpErrorResponse) => {
         this.error = this.extractErrorMessage(error);

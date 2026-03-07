@@ -32,6 +32,7 @@ Monorepo full-stack para gestión académica de la **Universidad Mariano Gálvez
 |   |-- schema.idempotent.sql
 |   |-- seed.sql
 |   |-- data_fix_consistency.sql
+|   |-- data_fix_history_statuses.sql
 |-- docs/
 |   |-- architecture.md
 |-- docker-compose.yml
@@ -74,6 +75,7 @@ Este comando aplica en orden:
 - `db/schema.sql`
 - `db/seed.sql`
 - `db/data_fix_consistency.sql`
+- `db/data_fix_history_statuses.sql`
 
 ### 3) Crear nueva migración (cuando cambie el modelo)
 ```bash
@@ -177,6 +179,7 @@ Patrón: `NNNN-YY-NNNN|NNNNN`
   - `POST /enrollments`
   - `GET /enrollments/my`
   - `POST /enrollments/{id}/cancel`
+  - `GET /enrollments/{id}/dire` (descarga DIRE de inscripción cuando la asignación está confirmada)
 - Payments:
   - `GET /payments/my` (Student)
   - `GET /payments/pending` (Admin)

@@ -53,6 +53,72 @@ public sealed class PdfService : IPdfService
         }).GeneratePdf();
     }
 
+    public byte[] BuildEnrollmentDirePdf(EnrollmentDirePdfModel model)
+    {
+        return Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Margin(28);
+                page.Header().Column(header =>
+                {
+                    header.Item().Text("UNIVERSIDAD MARIANO GALVEZ DE GUATEMALA").FontSize(14).Bold();
+                    header.Item().Text("DIRE DE INSCRIPCION").FontSize(20).Bold();
+                    header.Item().Text($"No. DIRE: {model.DireNumber}").FontSize(11).Bold();
+                    header.Item().Text($"Fecha de emision: {model.GeneratedAt:yyyy-MM-dd HH:mm}").FontSize(10);
+                });
+
+                page.Content().Column(content =>
+                {
+                    content.Spacing(8);
+                    content.Item().Text($"Estudiante: {model.StudentName}").FontSize(11);
+                    content.Item().Text($"Carnet: {model.Carnet}").FontSize(11);
+                    content.Item().Text($"Codigo estudiante: {model.StudentCode}").FontSize(11);
+                    content.Item().Text($"Programa: {model.ProgramName}").FontSize(11);
+                    content.Item().Text($"Sede actual: {model.CampusName}").FontSize(11);
+                    content.Item().Text($"Plan: {model.PlanShiftName}").FontSize(11);
+                    content.Item().Text($"Tipo de asignacion: {model.EnrollmentType}").FontSize(11);
+                    content.Item().Text($"Monto pagado: Q{model.TotalAmount:0.00} {model.Currency}").FontSize(11).Bold();
+
+                    content.Item().PaddingTop(8).Text("Detalle de cursos asignados").FontSize(12).Bold();
+                    content.Item().Table(table =>
+                    {
+                        table.ColumnsDefinition(columns =>
+                        {
+                            columns.RelativeColumn(1);
+                            columns.RelativeColumn(3);
+                            columns.RelativeColumn(1);
+                            columns.RelativeColumn(1);
+                        });
+
+                        table.Header(header =>
+                        {
+                            header.Cell().Element(DireCellStyle).Text("Codigo").Bold();
+                            header.Cell().Element(DireCellStyle).Text("Curso").Bold();
+                            header.Cell().Element(DireCellStyle).Text("Jornada").Bold();
+                            header.Cell().Element(DireCellStyle).Text("Tipo").Bold();
+                        });
+
+                        foreach (var course in model.Courses)
+                        {
+                            table.Cell().Element(DireCellStyle).Text(course.CourseCode);
+                            table.Cell().Element(DireCellStyle).Text(course.CourseName);
+                            table.Cell().Element(DireCellStyle).Text(course.ShiftName);
+                            table.Cell().Element(DireCellStyle).Text(course.CourseType);
+                        }
+                    });
+                });
+
+                page.Footer().AlignCenter().Text("Documento generado automaticamente por el portal estudiantil UMG.")
+                    .FontSize(9)
+                    .FontColor(Colors.Grey.Darken1);
+            });
+        }).GeneratePdf();
+
+        static IContainer DireCellStyle(IContainer container)
+            => container.Border(1).BorderColor(Colors.Grey.Lighten1).Padding(4);
+    }
+
     public byte[] BuildTableReportPdf(string title, IReadOnlyList<string> headers, IReadOnlyList<IReadOnlyList<string>> rows)
     {
         return Document.Create(container =>

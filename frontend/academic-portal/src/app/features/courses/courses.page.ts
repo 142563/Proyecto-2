@@ -129,6 +129,13 @@ import { StatusBadgeComponent } from '../../shared/components/status-badge.compo
               <td><app-status-badge [label]="item.status"></app-status-badge></td>
               <td class="text-right">
                 <button
+                  *ngIf="item.status === 'Confirmed'"
+                  class="btn-secondary mr-2 px-3 py-1 text-xs"
+                  (click)="downloadDire(item.enrollmentId)"
+                >
+                  Descargar DIRE
+                </button>
+                <button
                   *ngIf="item.status === 'PendingPayment'"
                   class="btn-danger px-3 py-1 text-xs"
                   (click)="cancelEnrollment(item.enrollmentId)"
@@ -340,6 +347,24 @@ export class CoursesPage {
 
         this.message = 'Asignación cancelada correctamente.';
         this.loadEnrollments();
+      },
+      error: (error: HttpErrorResponse) => {
+        this.error = this.extractErrorMessage(error);
+      }
+    });
+  }
+
+  downloadDire(enrollmentId: string): void {
+    this.error = '';
+
+    this.http.get(`${this.baseUrl}/enrollments/${enrollmentId}/dire`, { responseType: 'blob' }).subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `dire-inscripcion-${enrollmentId}.pdf`;
+        anchor.click();
+        window.URL.revokeObjectURL(url);
       },
       error: (error: HttpErrorResponse) => {
         this.error = this.extractErrorMessage(error);

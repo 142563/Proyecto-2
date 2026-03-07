@@ -29,7 +29,14 @@ public sealed record MockCheckoutCertificateDto(
     bool PdfAvailable
 );
 
+public sealed record MockCheckoutEnrollmentDireDto(
+    Guid EnrollmentId,
+    string DireNumber,
+    bool PdfAvailable
+);
+
 public sealed record MockCheckoutResultDto(
     PaymentOrderDto Payment,
-    MockCheckoutCertificateDto? Certificate
+    MockCheckoutCertificateDto? Certificate,
+    MockCheckoutEnrollmentDireDto? EnrollmentDire
 );

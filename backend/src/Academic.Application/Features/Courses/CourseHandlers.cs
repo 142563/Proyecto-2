@@ -1,5 +1,6 @@
 using Academic.Application.Abstractions;
 using Academic.Application.Common;
+using Academic.Application.Contracts.Common;
 using Academic.Application.Contracts.Courses;
 using MediatR;
 
@@ -90,5 +91,21 @@ public sealed class CancelEnrollmentCommandHandler(ICourseService courseService,
         }
 
         return courseService.CancelEnrollmentAsync(currentUser.StudentId.Value, request.EnrollmentId, cancellationToken);
+    }
+}
+
+public sealed record DownloadEnrollmentDireQuery(Guid EnrollmentId) : IRequest<Result<FilePayloadDto>>;
+
+public sealed class DownloadEnrollmentDireQueryHandler(ICourseService courseService, ICurrentUser currentUser)
+    : IRequestHandler<DownloadEnrollmentDireQuery, Result<FilePayloadDto>>
+{
+    public Task<Result<FilePayloadDto>> Handle(DownloadEnrollmentDireQuery request, CancellationToken cancellationToken)
+    {
+        if (!currentUser.StudentId.HasValue)
+        {
+            return Task.FromResult(Result<FilePayloadDto>.Failure("forbidden", "Only students can download enrollment DIRE files."));
+        }
+
+        return courseService.DownloadEnrollmentDireAsync(currentUser.StudentId.Value, request.EnrollmentId, cancellationToken);
     }
 }

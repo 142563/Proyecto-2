@@ -17,6 +17,7 @@ var repoRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..
 var schemaPath = Path.Combine(repoRoot, "db", "schema.sql");
 var seedPath = Path.Combine(repoRoot, "db", "seed.sql");
 var dataFixPath = Path.Combine(repoRoot, "db", "data_fix_consistency.sql");
+var historyStatusFixPath = Path.Combine(repoRoot, "db", "data_fix_history_statuses.sql");
 
 if (!File.Exists(schemaPath) || !File.Exists(seedPath))
 {
@@ -31,6 +32,11 @@ var scripts = new List<string> { schemaPath, seedPath };
 if (File.Exists(dataFixPath))
 {
     scripts.Add(dataFixPath);
+}
+
+if (File.Exists(historyStatusFixPath))
+{
+    scripts.Add(historyStatusFixPath);
 }
 
 foreach (var scriptPath in scripts)
