@@ -1,22 +1,22 @@
 <div class="min-h-screen text-slate-900">
-  <header class="border-b border-slate-200/40 bg-[color:var(--umg-navy-900)]/95 backdrop-blur">
-    <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-3">
-      <a routerLink="/dashboard" class="flex items-center gap-3">
-        <img src="assets/umg-shield.png" alt="Escudo UMG" class="h-11 w-11 rounded-full border border-white/25 bg-white/90 p-0.5" />
+  <header class="header-shell border-b border-slate-200/40 bg-[color:var(--umg-navy-900)]/95 backdrop-blur">
+    <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-3">
+      <a routerLink="/dashboard" class="brand-lockup flex items-center gap-3">
+        <img src="assets/umg-shield.png" alt="Escudo UMG" class="h-11 w-11 rounded-full border border-white/30 bg-white/95 p-0.5 shadow-sm" />
         <div>
-          <p class="font-display text-lg font-bold tracking-tight text-white md:text-xl">Portal MIUMG Estudiantil</p>
-          <p class="text-[11px] uppercase tracking-[0.11em] text-slate-200">Universidad Mariano Gálvez de Guatemala</p>
+          <p class="font-display text-lg font-bold tracking-tight text-white md:text-2xl">Portal MIUMG Estudiantil</p>
+          <p class="text-[11px] uppercase tracking-[0.12em] text-slate-200">Universidad Mariano Gálvez de Guatemala</p>
         </div>
       </a>
 
-      <nav class="flex items-center gap-2" *ngIf="auth.isAuthenticated()">
-        <a routerLink="/dashboard" routerLinkActive="nav-active" class="nav-link">Dashboard</a>
+      <nav class="nav-shell flex items-center gap-1.5 rounded-2xl border border-white/12 bg-white/8 p-1.5" *ngIf="auth.isAuthenticated()">
+        <a routerLink="/dashboard" routerLinkActive="nav-active" [routerLinkActiveOptions]="{ exact: true }" class="nav-link">Dashboard</a>
         <a *ngIf="isStudent()" routerLink="/transfers" routerLinkActive="nav-active" class="nav-link">Traslados</a>
         <a *ngIf="isStudent()" routerLink="/courses" routerLinkActive="nav-active" class="nav-link">Cursos</a>
         <a routerLink="/payments" routerLinkActive="nav-active" class="nav-link">Pagos</a>
         <a *ngIf="isStudent()" routerLink="/certificates" routerLinkActive="nav-active" class="nav-link">Certificados</a>
         <a *ngIf="isAdmin()" routerLink="/admin-reports" routerLinkActive="nav-active" class="nav-link">Reportes</a>
-        <button class="ml-3 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white" (click)="logout()">
+        <button type="button" class="logout-btn ml-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-white" (click)="logout()">
           Salir
         </button>
       </nav>

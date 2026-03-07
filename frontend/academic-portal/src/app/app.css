@@ -1,18 +1,48 @@
 .nav-link {
-  border-radius: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.8rem;
-  font-weight: 600;
+  border-radius: 0.75rem;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   color: #dbe8f7;
-  transition: background-color 150ms ease, color 150ms ease;
+  transition: background-color 150ms ease, color 150ms ease, transform 150ms ease;
 }
 
 .nav-link:hover {
-  background-color: rgba(255, 255, 255, 0.16);
+  background-color: rgba(255, 255, 255, 0.18);
   color: #fff;
+  transform: translateY(-1px);
 }
 
 .nav-active {
-  background-color: #c9a24f;
+  background: linear-gradient(135deg, #c9a24f, #e0bc6b);
   color: #08213f;
+  box-shadow: 0 8px 18px rgba(201, 162, 79, 0.28);
+}
+
+.logout-btn {
+  transition: background-color 150ms ease, transform 150ms ease, border-color 150ms ease;
+}
+
+.logout-btn:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  background-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 960px) {
+  .nav-shell {
+    width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .nav-shell::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-link {
+    white-space: nowrap;
+  }
 }
