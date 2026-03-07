@@ -18,8 +18,9 @@ var schemaPath = Path.Combine(repoRoot, "db", "schema.sql");
 var seedPath = Path.Combine(repoRoot, "db", "seed.sql");
 var dataFixPath = Path.Combine(repoRoot, "db", "data_fix_consistency.sql");
 var historyStatusFixPath = Path.Combine(repoRoot, "db", "data_fix_history_statuses.sql");
+var explicitScripts = args.Skip(1).ToArray();
 
-if (!File.Exists(schemaPath) || !File.Exists(seedPath))
+if (explicitScripts.Length == 0 && (!File.Exists(schemaPath) || !File.Exists(seedPath)))
 {
     Console.Error.WriteLine($"Could not find schema or seed files at {schemaPath} / {seedPath}");
     return 1;
@@ -28,15 +29,33 @@ if (!File.Exists(schemaPath) || !File.Exists(seedPath))
 await using var connection = new NpgsqlConnection(connectionString);
 await connection.OpenAsync();
 
-var scripts = new List<string> { schemaPath, seedPath };
-if (File.Exists(dataFixPath))
+var scripts = new List<string>();
+if (explicitScripts.Length > 0)
 {
-    scripts.Add(dataFixPath);
-}
+    foreach (var script in explicitScripts)
+    {
+        var scriptPath = Path.GetFullPath(Path.IsPathRooted(script) ? script : Path.Combine(repoRoot, script));
+        if (!File.Exists(scriptPath))
+        {
+            Console.Error.WriteLine($"Script file not found: {scriptPath}");
+            return 1;
+        }
 
-if (File.Exists(historyStatusFixPath))
+        scripts.Add(scriptPath);
+    }
+}
+else
 {
-    scripts.Add(historyStatusFixPath);
+    scripts.AddRange([schemaPath, seedPath]);
+    if (File.Exists(dataFixPath))
+    {
+        scripts.Add(dataFixPath);
+    }
+
+    if (File.Exists(historyStatusFixPath))
+    {
+        scripts.Add(historyStatusFixPath);
+    }
 }
 
 foreach (var scriptPath in scripts)

@@ -102,7 +102,9 @@ INSERT INTO users (id, email, password_hash, is_active) VALUES
 ('11111111-1111-1111-1111-111111111111', 'admin@umg.edu.gt', crypt('Admin123!', gen_salt('bf')), TRUE),
 ('22222222-2222-2222-2222-222222222222', 'ana.gomez@alumnos.umg.edu.gt', crypt('Student123!', gen_salt('bf')), TRUE),
 ('33333333-3333-3333-3333-333333333333', 'carlos.salazar@alumnos.umg.edu.gt', crypt('Student123!', gen_salt('bf')), TRUE),
-('44444444-4444-4444-4444-444444444444', 'maria.ortiz@alumnos.umg.edu.gt', crypt('Student123!', gen_salt('bf')), TRUE)
+('44444444-4444-4444-4444-444444444444', 'maria.ortiz@alumnos.umg.edu.gt', crypt('Student123!', gen_salt('bf')), TRUE),
+('55555555-5555-5555-5555-555555555555', 'jorge.castillo@alumnos.umg.edu.gt', crypt('Student123!', gen_salt('bf')), TRUE),
+('66666666-6666-6666-6666-666666666666', 'paola.ramirez@alumnos.umg.edu.gt', crypt('Student123!', gen_salt('bf')), TRUE)
 ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
     password_hash = EXCLUDED.password_hash,
@@ -114,7 +116,9 @@ INSERT INTO user_roles (user_id, role_id) VALUES
 ('11111111-1111-1111-1111-111111111111', 1),
 ('22222222-2222-2222-2222-222222222222', 2),
 ('33333333-3333-3333-3333-333333333333', 2),
-('44444444-4444-4444-4444-444444444444', 2)
+('44444444-4444-4444-4444-444444444444', 2),
+('55555555-5555-5555-5555-555555555555', 2),
+('66666666-6666-6666-6666-666666666666', 2)
 ON CONFLICT (user_id, role_id) DO NOTHING;
 
 -- Reset transactional demo data to keep seed idempotent and avoid stale locks.
@@ -125,7 +129,9 @@ WHERE enrollment_id IN (
     WHERE student_id IN (
         'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1',
         'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2',
-        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3'
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3',
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4',
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5'
     )
 );
 
@@ -133,35 +139,45 @@ DELETE FROM certificates
 WHERE student_id IN (
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1',
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2',
-    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3'
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5'
 );
 
 DELETE FROM transfer_requests
 WHERE student_id IN (
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1',
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2',
-    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3'
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5'
 );
 
 DELETE FROM enrollments
 WHERE student_id IN (
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1',
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2',
-    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3'
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5'
 );
 
 DELETE FROM payment_orders
 WHERE student_id IN (
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1',
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2',
-    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3'
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5'
 );
 
 DELETE FROM audit_logs
 WHERE user_id IN (
     '22222222-2222-2222-2222-222222222222',
     '33333333-3333-3333-3333-333333333333',
-    '44444444-4444-4444-4444-444444444444'
+    '44444444-4444-4444-4444-444444444444',
+    '55555555-5555-5555-5555-555555555555',
+    '66666666-6666-6666-6666-666666666666'
 );
 
 -- Students
@@ -171,7 +187,9 @@ INSERT INTO students (
 ) VALUES
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', '22222222-2222-2222-2222-222222222222', 'SIS-22001', '0908-22-14264', '0908', 22, '14264', 'ana.gomez@alumnos.umg.edu.gt', 'Ana Lucia', 'Gomez Morales', 1, 17, 1, TRUE),
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', '33333333-3333-3333-3333-333333333333', 'SIS-23009', '0909-23-09876', '0909', 23, '09876', 'carlos.salazar@alumnos.umg.edu.gt', 'Carlos Eduardo', 'Salazar Lopez', 1, 17, 2, TRUE),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', '44444444-4444-4444-4444-444444444444', 'PSI-21001', '7305-21-10458', '7305', 21, '10458', 'maria.ortiz@alumnos.umg.edu.gt', 'Maria Fernanda', 'Ortiz Lopez', 2, 19, 1, TRUE)
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', '44444444-4444-4444-4444-444444444444', 'PSI-21001', '7305-21-10458', '7305', 21, '10458', 'maria.ortiz@alumnos.umg.edu.gt', 'Maria Fernanda', 'Ortiz Lopez', 2, 19, 1, TRUE),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', '55555555-5555-5555-5555-555555555555', 'SIS-24015', '0904-24-15321', '0904', 24, '15321', 'jorge.castillo@alumnos.umg.edu.gt', 'Jorge Andres', 'Castillo Rivera', 1, 5, 1, TRUE),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', '66666666-6666-6666-6666-666666666666', 'PSI-24007', '7306-24-11234', '7306', 24, '11234', 'paola.ramirez@alumnos.umg.edu.gt', 'Paola Andrea', 'Ramirez Soto', 2, 19, 2, TRUE)
 ON CONFLICT (id) DO UPDATE SET
     user_id = EXCLUDED.user_id,
     student_code = EXCLUDED.student_code,
@@ -391,7 +409,13 @@ ON CONFLICT DO NOTHING;
 
 -- Course history
 DELETE FROM student_course_history
-WHERE student_id IN ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3');
+WHERE student_id IN (
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5'
+);
 
 INSERT INTO student_course_history (student_id, course_id, year, term, grade, status) VALUES
 -- Ana (7mo ciclo con pendientes historicos)
@@ -480,7 +504,53 @@ INSERT INTO student_course_history (student_id, course_id, year, term, grade, st
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 140, 2025, '2025-2', 91.00, 'Passed'),
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 141, 2025, '2025-2', 88.00, 'Passed'),
 ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 142, 2025, '2025-2', 90.00, 'Passed'),
-('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 143, 2025, '2025-2', 93.00, 'Passed');
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 143, 2025, '2025-2', 93.00, 'Passed'),
+-- Jorge (Sistemas, 5to ciclo con 2 atrasados: 090001 y 090017)
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 1, 2024, '2024-1', 58.00, 'Failed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 2, 2024, '2024-1', 81.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 3, 2024, '2024-1', 77.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 4, 2024, '2024-1', 83.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 5, 2024, '2024-1', 80.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 6, 2024, '2024-2', 76.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 7, 2024, '2024-2', 78.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 8, 2024, '2024-2', 84.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 9, 2024, '2024-2', 79.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 10, 2024, '2024-2', 82.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 11, 2025, '2025-1', 75.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 12, 2025, '2025-1', 80.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 13, 2025, '2025-1', 77.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 14, 2025, '2025-1', 84.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 15, 2025, '2025-1', 79.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 16, 2025, '2025-2', 74.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 17, 2025, '2025-2', 55.00, 'Failed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 18, 2025, '2025-2', 76.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 19, 2025, '2025-2', 78.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 20, 2025, '2025-2', 75.00, 'Passed'),
+-- Paola (Psicologia Industrial, 6to ciclo con atrasados 117 y 120)
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 100, 2024, '2024-1', 84.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 101, 2024, '2024-1', 86.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 102, 2024, '2024-1', 79.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 103, 2024, '2024-1', 81.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 104, 2024, '2024-2', 80.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 105, 2024, '2024-2', 82.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 106, 2024, '2024-2', 85.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 107, 2024, '2024-2', 88.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 108, 2025, '2025-1', 83.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 109, 2025, '2025-1', 86.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 110, 2025, '2025-1', 84.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 111, 2025, '2025-1', 82.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 112, 2025, '2025-2', 87.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 113, 2025, '2025-2', 84.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 114, 2025, '2025-2', 85.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 115, 2025, '2025-2', 86.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 116, 2026, '2026-1', 83.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 117, 2026, '2026-1', 57.00, 'Failed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 118, 2026, '2026-1', 81.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 119, 2026, '2026-1', 80.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 120, 2026, '2026-2', 58.00, 'Failed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 121, 2026, '2026-2', 82.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 122, 2026, '2026-2', 85.00, 'Passed'),
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 123, 2026, '2026-2', 83.00, 'Passed');
 
 -- Pricing catalog in GTQ
 UPDATE pricing_catalog
@@ -503,7 +573,9 @@ ON CONFLICT DO NOTHING;
 INSERT INTO payment_orders (id, student_id, order_type, reference_id, amount, currency, status, description, created_at, expires_at, paid_at) VALUES
 ('70000000-0000-0000-0000-000000000001', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'Certificate', '80000000-0000-0000-0000-000000000001', 70.00, 'GTQ', 'Paid', 'Pago Certificacion de cursos', NOW() - INTERVAL '12 days', NOW() - INTERVAL '10 days', NOW() - INTERVAL '11 days'),
 ('70000000-0000-0000-0000-000000000002', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'Certificate', '80000000-0000-0000-0000-000000000002', 70.00, 'GTQ', 'Paid', 'Pago Certificacion de matricula', NOW() - INTERVAL '9 days', NOW() - INTERVAL '7 days', NOW() - INTERVAL '8 days'),
-('70000000-0000-0000-0000-000000000003', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 'Certificate', '80000000-0000-0000-0000-000000000003', 70.00, 'GTQ', 'Paid', 'Pago Cierre de pensum', NOW() - INTERVAL '5 days', NOW() - INTERVAL '3 days', NOW() - INTERVAL '4 days')
+('70000000-0000-0000-0000-000000000003', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 'Certificate', '80000000-0000-0000-0000-000000000003', 70.00, 'GTQ', 'Paid', 'Pago Cierre de pensum', NOW() - INTERVAL '5 days', NOW() - INTERVAL '3 days', NOW() - INTERVAL '4 days'),
+('70000000-0000-0000-0000-000000000004', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', 'Certificate', '80000000-0000-0000-0000-000000000004', 70.00, 'GTQ', 'Paid', 'Pago Certificacion de cursos', NOW() - INTERVAL '4 days', NOW() - INTERVAL '2 days', NOW() - INTERVAL '3 days'),
+('70000000-0000-0000-0000-000000000005', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', 'Certificate', '80000000-0000-0000-0000-000000000005', 70.00, 'GTQ', 'Paid', 'Pago Certificacion de matricula', NOW() - INTERVAL '3 days', NOW() - INTERVAL '1 days', NOW() - INTERVAL '2 days')
 ON CONFLICT (id) DO UPDATE SET
     status = EXCLUDED.status,
     description = EXCLUDED.description,
@@ -514,7 +586,9 @@ ON CONFLICT (id) DO UPDATE SET
 INSERT INTO certificates (id, student_id, payment_order_id, purpose, status, verification_code, pdf_path, metadata, created_at, generated_at, sent_at) VALUES
 ('80000000-0000-0000-0000-000000000001', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', '70000000-0000-0000-0000-000000000001', 'Certificacion de cursos', 'Sent', 'UMG-CERT-COURSES-0001', NULL, '{"certificateType":"courses","source":"seed.sql"}'::jsonb, NOW() - INTERVAL '12 days', NOW() - INTERVAL '11 days', NOW() - INTERVAL '11 days'),
 ('80000000-0000-0000-0000-000000000002', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', '70000000-0000-0000-0000-000000000002', 'Certificacion de matricula', 'Sent', 'UMG-CERT-ENROLL-0002', NULL, '{"certificateType":"enrollment","source":"seed.sql"}'::jsonb, NOW() - INTERVAL '9 days', NOW() - INTERVAL '8 days', NOW() - INTERVAL '8 days'),
-('80000000-0000-0000-0000-000000000003', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', '70000000-0000-0000-0000-000000000003', 'Cierre de pensum', 'Sent', 'UMG-CERT-PENSUM-0003', NULL, '{"certificateType":"pensum-closure","source":"seed.sql"}'::jsonb, NOW() - INTERVAL '5 days', NOW() - INTERVAL '4 days', NOW() - INTERVAL '4 days')
+('80000000-0000-0000-0000-000000000003', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', '70000000-0000-0000-0000-000000000003', 'Cierre de pensum', 'Sent', 'UMG-CERT-PENSUM-0003', NULL, '{"certificateType":"pensum-closure","source":"seed.sql"}'::jsonb, NOW() - INTERVAL '5 days', NOW() - INTERVAL '4 days', NOW() - INTERVAL '4 days'),
+('80000000-0000-0000-0000-000000000004', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4', '70000000-0000-0000-0000-000000000004', 'Certificacion de cursos', 'Sent', 'UMG-CERT-COURSES-0004', NULL, '{"certificateType":"courses","source":"seed.sql"}'::jsonb, NOW() - INTERVAL '4 days', NOW() - INTERVAL '3 days', NOW() - INTERVAL '3 days'),
+('80000000-0000-0000-0000-000000000005', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa5', '70000000-0000-0000-0000-000000000005', 'Certificacion de matricula', 'Sent', 'UMG-CERT-ENROLL-0005', NULL, '{"certificateType":"enrollment","source":"seed.sql"}'::jsonb, NOW() - INTERVAL '3 days', NOW() - INTERVAL '2 days', NOW() - INTERVAL '2 days')
 ON CONFLICT (id) DO UPDATE SET
     status = EXCLUDED.status,
     purpose = EXCLUDED.purpose,
