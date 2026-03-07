@@ -180,6 +180,7 @@ Patrón: `NNNN-YY-NNNN|NNNNN`
 - Payments:
   - `GET /payments/my` (Student)
   - `GET /payments/pending` (Admin)
+  - `POST /payments/{id}/mock-checkout` (Student, pasarela ficticia con tarjeta demo)
   - `POST /payments/{id}/mark-paid` (Admin)
 - Certificates:
   - `GET /certificates/types`
@@ -206,6 +207,11 @@ cd frontend/academic-portal
 npm run lint
 npm run build
 ```
+
+## Pago demo (ficticio)
+- El endpoint `POST /payments/{id}/mock-checkout` valida formato básico de tarjeta y aprueba el pago para pruebas.
+- No se almacenan datos sensibles completos de tarjeta (solo auditoría enmascarada).
+- Si la orden pagada es de tipo `Certificate`, el sistema intenta generar el PDF automáticamente y habilita descarga inmediata.
 
 ## Branding y logo
 - Escudo UMG utilizado desde fuente pública:  

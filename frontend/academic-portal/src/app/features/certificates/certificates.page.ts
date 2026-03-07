@@ -4,7 +4,13 @@ import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { API_BASE_URL } from '../../core/config/api.config';
 import { StatusBadgeComponent } from '../../shared/components/status-badge.component';
-import { ApiEnvelope, CertificateSummaryResponse, CertificateTypeResponse } from '../../shared/models/api.models';
+import {
+  ApiEnvelope,
+  CertificateSummaryResponse,
+  CertificateTypeResponse,
+  MockCheckoutRequest,
+  MockCheckoutResponse
+} from '../../shared/models/api.models';
 
 @Component({
   standalone: true,
@@ -24,15 +30,8 @@ import { ApiEnvelope, CertificateSummaryResponse, CertificateTypeResponse } from
           Requiere tener el pensum completo aprobado.
         </p>
         <button class="btn-primary px-4 py-2" [disabled]="!selectedTypeCode" (click)="requestCertificate()">
-          Solicitar (genera orden)
+          Solicitar certificado
         </button>
-      </div>
-
-      <div class="mt-5 border-t border-slate-200 pt-4" *ngIf="certificateId">
-        <p class="text-sm text-muted">Certificado: {{ certificateId }}</p>
-        <p class="text-sm text-muted">Código: {{ verificationCode }}</p>
-        <button class="btn-primary mt-3 px-4 py-2" (click)="generateCertificate()">Generar PDF (si el pago está confirmado)</button>
-        <button class="btn-secondary ml-2 mt-3 px-4 py-2" (click)="downloadCertificate()">Descargar PDF</button>
       </div>
 
       <div class="mt-5 border-t border-slate-200 pt-4">
@@ -40,6 +39,30 @@ import { ApiEnvelope, CertificateSummaryResponse, CertificateTypeResponse } from
         <div class="mt-2 flex gap-2">
           <input class="input-control" [(ngModel)]="verifyCode" placeholder="Código de verificación" />
           <button class="btn-secondary px-4 py-2" (click)="verify()">Verificar</button>
+        </div>
+      </div>
+
+      <div *ngIf="checkoutCertificate" class="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <h3 class="text-sm font-semibold uppercase tracking-wide text-[color:var(--umg-navy-700)]">Pago con tarjeta (demo)</h3>
+        <p class="mt-1 text-sm text-muted">
+          Certificado: {{ checkoutCertificate.purpose }} · Q{{ checkoutCertificate.amount | number:'1.2-2' }} {{ checkoutCertificate.currency }}
+        </p>
+
+        <div class="mt-3 grid gap-3 md:grid-cols-2">
+          <input class="input-control" [(ngModel)]="checkout.cardHolderName" placeholder="Nombre del titular" />
+          <input class="input-control" [(ngModel)]="checkout.cardNumber" placeholder="Número de tarjeta" />
+          <input class="input-control" type="number" [(ngModel)]="checkout.expiryMonth" placeholder="Mes (MM)" />
+          <input class="input-control" type="number" [(ngModel)]="checkout.expiryYear" placeholder="Año (YYYY)" />
+          <input class="input-control md:col-span-2" [(ngModel)]="checkout.cvv" placeholder="CVV" />
+        </div>
+
+        <div class="mt-3 flex gap-2">
+          <button class="btn-primary px-4 py-2 text-sm" [disabled]="checkoutLoading" (click)="submitCheckout()">
+            {{ checkoutLoading ? 'Procesando...' : 'Confirmar pago' }}
+          </button>
+          <button class="btn-secondary px-4 py-2 text-sm" [disabled]="checkoutLoading" (click)="cancelCheckout()">
+            Cancelar
+          </button>
         </div>
       </div>
 
@@ -56,7 +79,7 @@ import { ApiEnvelope, CertificateSummaryResponse, CertificateTypeResponse } from
               <th class="py-2">Fecha</th>
               <th>Motivo</th>
               <th>Monto</th>
-              <th>Vence</th>
+              <th>Pago</th>
               <th>Estado</th>
               <th class="text-right">Acción</th>
             </tr>
@@ -66,12 +89,39 @@ import { ApiEnvelope, CertificateSummaryResponse, CertificateTypeResponse } from
               <td class="py-2">{{ item.createdAt | date:'short' }}</td>
               <td>{{ item.purpose }}</td>
               <td>Q{{ item.amount | number:'1.2-2' }} {{ item.currency }}</td>
-              <td>{{ item.paymentExpiresAt | date:'short' }}</td>
+              <td><app-status-badge [label]="item.paymentStatus"></app-status-badge></td>
               <td><app-status-badge [label]="item.status"></app-status-badge></td>
               <td class="text-right">
-                <button *ngIf="item.status === 'Requested'" class="btn-danger px-3 py-1 text-xs" (click)="cancelCertificate(item.id)">
-                  Cancelar
-                </button>
+                <div class="flex justify-end gap-2">
+                  <button
+                    *ngIf="item.status === 'Requested' && item.paymentStatus === 'Pending'"
+                    class="btn-primary px-3 py-1 text-xs"
+                    (click)="openCheckout(item)"
+                  >
+                    Pagar
+                  </button>
+                  <button
+                    *ngIf="item.status === 'Requested' && item.paymentStatus === 'Paid'"
+                    class="btn-secondary px-3 py-1 text-xs"
+                    (click)="generateCertificate(item.id)"
+                  >
+                    Generar
+                  </button>
+                  <button
+                    *ngIf="item.pdfAvailable"
+                    class="btn-secondary px-3 py-1 text-xs"
+                    (click)="downloadCertificate(item.id)"
+                  >
+                    Ver/Descargar
+                  </button>
+                  <button
+                    *ngIf="item.status === 'Requested' && item.paymentStatus === 'Pending'"
+                    class="btn-danger px-3 py-1 text-xs"
+                    (click)="cancelCertificate(item.id)"
+                  >
+                    Cancelar
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -87,9 +137,16 @@ export class CertificatesPage {
   certificateTypes: CertificateTypeResponse[] = [];
   certificates: CertificateSummaryResponse[] = [];
   selectedTypeCode = '';
-  certificateId = '';
-  verificationCode = '';
   verifyCode = '';
+  checkoutCertificate: CertificateSummaryResponse | null = null;
+  checkoutLoading = false;
+  checkout: MockCheckoutRequest = {
+    cardHolderName: 'Usuario Demo',
+    cardNumber: '4242424242424242',
+    expiryMonth: 12,
+    expiryYear: 2032,
+    cvv: '123'
+  };
   message = '';
   error = '';
 
@@ -141,8 +198,6 @@ export class CertificatesPage {
             return;
           }
 
-          this.certificateId = response.data.certificateId;
-          this.verificationCode = response.data.verificationCode;
           this.message = `Solicitud creada. Orden de pago: ${response.data.paymentOrderId} por Q${response.data.amount.toFixed(2)} ${response.data.currency}`;
           this.loadMyCertificates();
         },
@@ -152,13 +207,12 @@ export class CertificatesPage {
       });
   }
 
-  generateCertificate(): void {
-    if (!this.certificateId) {
-      return;
-    }
+  generateCertificate(certificateId: string): void {
+    this.error = '';
+    this.message = '';
 
     this.http
-      .post<ApiEnvelope<{ status: string }>>(`${this.baseUrl}/certificates/${this.certificateId}/generate`, {
+      .post<ApiEnvelope<{ status: string }>>(`${this.baseUrl}/certificates/${certificateId}/generate`, {
         sendEmail: true,
         includeQr: false
       })
@@ -171,6 +225,7 @@ export class CertificatesPage {
 
           this.message = `Certificado generado con estado ${response.data.status}.`;
           this.loadMyCertificates();
+          this.downloadCertificate(certificateId);
         },
         error: (error: HttpErrorResponse) => {
           this.error = this.extractErrorMessage(error);
@@ -178,17 +233,13 @@ export class CertificatesPage {
       });
   }
 
-  downloadCertificate(): void {
-    if (!this.certificateId) {
-      return;
-    }
-
-    this.http.get(`${this.baseUrl}/certificates/${this.certificateId}/download`, { responseType: 'blob' }).subscribe({
+  downloadCertificate(certificateId: string): void {
+    this.http.get(`${this.baseUrl}/certificates/${certificateId}/download`, { responseType: 'blob' }).subscribe({
       next: (blob) => {
         const url = window.URL.createObjectURL(blob);
         const anchor = document.createElement('a');
         anchor.href = url;
-        anchor.download = `certificate-${this.certificateId}.pdf`;
+        anchor.download = `certificate-${certificateId}.pdf`;
         anchor.click();
         window.URL.revokeObjectURL(url);
       },
@@ -196,6 +247,56 @@ export class CertificatesPage {
         this.error = 'No fue posible descargar el certificado.';
       }
     });
+  }
+
+  openCheckout(certificate: CertificateSummaryResponse): void {
+    this.error = '';
+    this.message = '';
+    this.checkoutCertificate = certificate;
+  }
+
+  cancelCheckout(): void {
+    this.checkoutLoading = false;
+    this.checkoutCertificate = null;
+  }
+
+  submitCheckout(): void {
+    if (!this.checkoutCertificate || this.checkoutLoading) {
+      return;
+    }
+
+    this.error = '';
+    this.message = '';
+    this.checkoutLoading = true;
+
+    this.http
+      .post<ApiEnvelope<MockCheckoutResponse>>(
+        `${this.baseUrl}/payments/${this.checkoutCertificate.paymentOrderId}/mock-checkout`,
+        this.checkout
+      )
+      .subscribe({
+        next: (response) => {
+          this.checkoutLoading = false;
+          if (!response.success) {
+            this.error = response.error?.message ?? 'No fue posible completar el pago.';
+            return;
+          }
+
+          this.message = 'Pago aprobado correctamente.';
+          const generatedCertificate = response.data.certificate;
+          if (generatedCertificate?.pdfAvailable) {
+            this.downloadCertificate(generatedCertificate.certificateId);
+            this.message += ' Certificado generado y descargado.';
+          }
+
+          this.checkoutCertificate = null;
+          this.loadMyCertificates();
+        },
+        error: (error: HttpErrorResponse) => {
+          this.checkoutLoading = false;
+          this.error = this.extractErrorMessage(error);
+        }
+      });
   }
 
   cancelCertificate(certificateId: string): void {

@@ -32,3 +32,6 @@ coverage/
 
 # Angular cache
 .angular/
+
+# Runtime generated files
+backend/src/Academic.Api/storage/

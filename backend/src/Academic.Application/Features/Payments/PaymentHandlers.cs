@@ -45,3 +45,24 @@ public sealed class MarkPaymentPaidCommandHandler(IPaymentService paymentService
         return paymentService.MarkPaidAsync(request.PaymentId, currentUser.UserId.Value, cancellationToken);
     }
 }
+
+public sealed record MockCheckoutCommand(Guid PaymentId, MockCheckoutRequestDto Request) : IRequest<Result<MockCheckoutResultDto>>;
+
+public sealed class MockCheckoutCommandHandler(IPaymentService paymentService, ICurrentUser currentUser)
+    : IRequestHandler<MockCheckoutCommand, Result<MockCheckoutResultDto>>
+{
+    public Task<Result<MockCheckoutResultDto>> Handle(MockCheckoutCommand request, CancellationToken cancellationToken)
+    {
+        if (!currentUser.UserId.HasValue || !currentUser.StudentId.HasValue)
+        {
+            return Task.FromResult(Result<MockCheckoutResultDto>.Failure("forbidden", "Solo estudiantes autenticados pueden pagar."));
+        }
+
+        return paymentService.MockCheckoutAsync(
+            request.PaymentId,
+            currentUser.StudentId.Value,
+            currentUser.UserId.Value,
+            request.Request,
+            cancellationToken);
+    }
+}

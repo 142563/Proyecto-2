@@ -32,10 +32,6 @@ import { AuthService } from '../../core/auth/auth.service';
           {{ loading ? 'Ingresando...' : 'Iniciar sesión' }}
         </button>
       </form>
-
-      <p class="mt-5 text-xs text-muted">
-        Demo: admin@umg.edu.gt / Admin123! | ana.gomez@alumnos.umg.edu.gt / Student123!
-      </p>
     </div>
   `
 })

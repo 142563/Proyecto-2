@@ -35,6 +35,8 @@ public sealed record CertificateSummaryDto(
     Guid Id,
     string Purpose,
     string Status,
+    string PaymentStatus,
+    bool PdfAvailable,
     string VerificationCode,
     Guid PaymentOrderId,
     decimal Amount,

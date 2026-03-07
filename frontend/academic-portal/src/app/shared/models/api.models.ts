@@ -52,6 +52,26 @@ export interface PaymentOrderResponse {
   cancelledAt?: string | null;
 }
 
+export interface MockCheckoutRequest {
+  cardHolderName: string;
+  cardNumber: string;
+  expiryMonth: number;
+  expiryYear: number;
+  cvv: string;
+}
+
+export interface MockCheckoutCertificateResponse {
+  certificateId: string;
+  status: string;
+  verificationCode: string;
+  pdfAvailable: boolean;
+}
+
+export interface MockCheckoutResponse {
+  payment: PaymentOrderResponse;
+  certificate?: MockCheckoutCertificateResponse | null;
+}
+
 export interface TransferResponse {
   transferId: string;
   studentCode: string;
@@ -122,6 +142,8 @@ export interface CertificateSummaryResponse {
   id: string;
   purpose: string;
   status: string;
+  paymentStatus: 'Pending' | 'Paid' | 'Cancelled';
+  pdfAvailable: boolean;
   verificationCode: string;
   paymentOrderId: string;
   amount: number;

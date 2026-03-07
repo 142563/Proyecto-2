@@ -13,3 +13,23 @@ public sealed record PaymentOrderDto(
     DateTime? PaidAt,
     DateTime? CancelledAt
 );
+
+public sealed record MockCheckoutRequestDto(
+    string CardHolderName,
+    string CardNumber,
+    short ExpiryMonth,
+    short ExpiryYear,
+    string Cvv
+);
+
+public sealed record MockCheckoutCertificateDto(
+    Guid CertificateId,
+    string Status,
+    string VerificationCode,
+    bool PdfAvailable
+);
+
+public sealed record MockCheckoutResultDto(
+    PaymentOrderDto Payment,
+    MockCheckoutCertificateDto? Certificate
+);

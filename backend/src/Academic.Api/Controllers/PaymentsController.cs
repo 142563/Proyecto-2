@@ -1,4 +1,5 @@
 using Academic.Application.Features.Payments;
+using Academic.Application.Contracts.Payments;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -31,6 +32,17 @@ public sealed class PaymentsController(IMediator mediator) : ControllerBase
     public async Task<ActionResult> MarkPaid([FromRoute] Guid id, CancellationToken cancellationToken)
     {
         var result = await mediator.Send(new MarkPaymentPaidCommand(id), cancellationToken);
+        return this.ToActionResult(result);
+    }
+
+    [Authorize(Roles = "Student")]
+    [HttpPost("{id:guid}/mock-checkout")]
+    public async Task<ActionResult> MockCheckout(
+        [FromRoute] Guid id,
+        [FromBody] MockCheckoutRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new MockCheckoutCommand(id, request), cancellationToken);
         return this.ToActionResult(result);
     }
 }

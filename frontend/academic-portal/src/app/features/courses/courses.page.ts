@@ -411,15 +411,7 @@ export class CoursesPage {
   }
 
   isSelectableCourse(course: CourseDto): boolean {
-    if (course.isApproved) {
-      return false;
-    }
-
-    if (this.overdue.length > 0 && !course.isOverdue) {
-      return false;
-    }
-
-    return true;
+    return !course.isApproved;
   }
 
   private normalizeShift(shift: string | undefined | null): ShiftName {
@@ -451,10 +443,6 @@ export class CoursesPage {
   private nonSelectableReason(course: CourseDto): string {
     if (course.isApproved) {
       return 'Este curso ya está aprobado.';
-    }
-
-    if (this.overdue.length > 0 && !course.isOverdue) {
-      return 'Tienes cursos atrasados pendientes. Solo puedes asignar cursos atrasados.';
     }
 
     return 'Este curso no puede asignarse en este momento.';

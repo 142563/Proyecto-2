@@ -783,17 +783,6 @@ public sealed class AcademicOperationsService(
             return Result<EnrollmentResultDto>.Failure("business_rule", "No puedes asignarte cursos que ya tienes aprobados.");
         }
 
-        if (overdueIds.Count > 0)
-        {
-            var nonOverdueSelections = uniqueIds.Where(id => !overdueIds.Contains(id)).ToList();
-            if (nonOverdueSelections.Count > 0)
-            {
-                return Result<EnrollmentResultDto>.Failure(
-                    "business_rule",
-                    "Tienes cursos atrasados pendientes. Debes asignar primero únicamente tus cursos atrasados.");
-            }
-        }
-
         var courseExtraPricing = await GetServicePricingAsync("CourseExtra", student.ProgramId, cancellationToken);
         var courseOverduePricing = await GetServicePricingAsync("CourseOverdue", student.ProgramId, cancellationToken);
 
@@ -989,66 +978,74 @@ public sealed class AcademicOperationsService(
             return Result<PaymentOrderDto>.Failure("not_found", "Payment order not found.");
         }
 
-        await ReconcileExpiredPendingAsync(payment.StudentId, cancellationToken);
+        return await MarkPaymentAsPaidInternalAsync(payment, actedByUserId, cancellationToken);
+    }
+
+    public async Task<Result<MockCheckoutResultDto>> MockCheckoutAsync(
+        Guid paymentId,
+        Guid studentId,
+        Guid actedByUserId,
+        MockCheckoutRequestDto request,
+        CancellationToken cancellationToken)
+    {
+        var cardValidation = ValidateMockCard(request);
+        if (cardValidation.Count > 0)
+        {
+            return Result<MockCheckoutResultDto>.ValidationFailure(cardValidation);
+        }
+
+        var payment = await _dbContext.PaymentOrders
+            .FirstOrDefaultAsync(x => x.Id == paymentId && x.StudentId == studentId, cancellationToken);
+
+        if (payment is null)
+        {
+            return Result<MockCheckoutResultDto>.Failure("not_found", "No se encontró la orden de pago.");
+        }
 
         if (payment.Status != DomainStatuses.Payment.Pending)
         {
-            return Result<PaymentOrderDto>.Failure("business_rule", "Only pending payments can be marked as paid.");
+            return Result<MockCheckoutResultDto>.Failure("business_rule", "La orden de pago ya no está pendiente.");
         }
 
-        if (IsPaymentExpired(payment))
+        var paidResult = await MarkPaymentAsPaidInternalAsync(payment, actedByUserId, cancellationToken);
+        if (!paidResult.IsSuccess || paidResult.Value is null)
         {
-            payment.Status = DomainStatuses.Payment.Cancelled;
-            payment.CancelledAt = DateTime.UtcNow;
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            return Result<PaymentOrderDto>.Failure("business_rule", "Payment order expired and was cancelled.");
+            return Result<MockCheckoutResultDto>.Failure(
+                paidResult.Error?.Code ?? "payment_error",
+                paidResult.Error?.Message ?? "No fue posible aprobar el pago.");
         }
 
-        payment.Status = DomainStatuses.Payment.Paid;
-        payment.PaidAt = DateTime.UtcNow;
-
-        if (payment.OrderType == "Transfer")
+        MockCheckoutCertificateDto? certificate = null;
+        if (string.Equals(payment.OrderType, "Certificate", StringComparison.OrdinalIgnoreCase))
         {
-            var transfer = await _dbContext.TransferRequests.FirstOrDefaultAsync(x => x.Id == payment.ReferenceId, cancellationToken);
-            if (transfer is not null)
+            var certificateGeneration = await TryGenerateCertificateFromPaymentAsync(studentId, payment.Id, cancellationToken);
+            if (!certificateGeneration.IsSuccess)
             {
-                transfer.Status = DomainStatuses.Transfer.PendingReview;
-                transfer.UpdatedAt = DateTime.UtcNow;
+                return Result<MockCheckoutResultDto>.Failure(
+                    certificateGeneration.Error?.Code ?? "certificate_error",
+                    certificateGeneration.Error?.Message ?? "Pago aprobado, pero no se pudo generar el certificado.");
             }
-        }
-        else if (payment.OrderType == "Enrollment")
-        {
-            var enrollment = await _dbContext.Enrollments.FirstOrDefaultAsync(x => x.Id == payment.ReferenceId, cancellationToken);
-            if (enrollment is not null)
-            {
-                enrollment.Status = DomainStatuses.Enrollment.Confirmed;
-                enrollment.UpdatedAt = DateTime.UtcNow;
-            }
+
+            certificate = certificateGeneration.Value;
         }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
+        var maskedCard = MaskCardNumber(request.CardNumber);
         await _auditLogService.LogAsync(
             actedByUserId,
-            "PaymentMarkedPaid",
+            "PaymentMockCheckoutApproved",
             "PaymentOrder",
             payment.Id.ToString(),
-            new { payment.OrderType, payment.ReferenceId },
+            new
+            {
+                payment.OrderType,
+                payment.ReferenceId,
+                cardHolder = request.CardHolderName.Trim(),
+                cardMasked = maskedCard
+            },
             null,
             cancellationToken);
 
-        return Result<PaymentOrderDto>.Success(new PaymentOrderDto(
-            payment.Id,
-            payment.OrderType,
-            payment.ReferenceId,
-            payment.Amount,
-            payment.Currency,
-            payment.Status,
-            payment.Description,
-            payment.CreatedAt,
-            payment.ExpiresAt,
-            payment.PaidAt,
-            payment.CancelledAt));
+        return Result<MockCheckoutResultDto>.Success(new MockCheckoutResultDto(paidResult.Value, certificate));
     }
 
     public Task<Result<IReadOnlyList<CertificateTypeDto>>> GetTypesAsync(CancellationToken cancellationToken)
@@ -1293,6 +1290,8 @@ public sealed class AcademicOperationsService(
                 x.Id,
                 x.Purpose,
                 x.Status,
+                x.PaymentOrder.Status,
+                !string.IsNullOrWhiteSpace(x.PdfPath),
                 x.VerificationCode,
                 x.PaymentOrderId,
                 x.PaymentOrder.Amount,
@@ -1713,6 +1712,224 @@ public sealed class AcademicOperationsService(
 
         return expiredPayments.Count;
     }
+
+    private async Task<Result<PaymentOrderDto>> MarkPaymentAsPaidInternalAsync(
+        PaymentOrder payment,
+        Guid actedByUserId,
+        CancellationToken cancellationToken)
+    {
+        await ReconcileExpiredPendingAsync(payment.StudentId, cancellationToken);
+
+        if (payment.Status != DomainStatuses.Payment.Pending)
+        {
+            return Result<PaymentOrderDto>.Failure("business_rule", "Only pending payments can be marked as paid.");
+        }
+
+        if (IsPaymentExpired(payment))
+        {
+            payment.Status = DomainStatuses.Payment.Cancelled;
+            payment.CancelledAt = DateTime.UtcNow;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return Result<PaymentOrderDto>.Failure("business_rule", "Payment order expired and was cancelled.");
+        }
+
+        payment.Status = DomainStatuses.Payment.Paid;
+        payment.PaidAt = DateTime.UtcNow;
+
+        if (payment.OrderType == "Transfer")
+        {
+            var transfer = await _dbContext.TransferRequests.FirstOrDefaultAsync(x => x.Id == payment.ReferenceId, cancellationToken);
+            if (transfer is not null)
+            {
+                transfer.Status = DomainStatuses.Transfer.PendingReview;
+                transfer.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+        else if (payment.OrderType == "Enrollment")
+        {
+            var enrollment = await _dbContext.Enrollments.FirstOrDefaultAsync(x => x.Id == payment.ReferenceId, cancellationToken);
+            if (enrollment is not null)
+            {
+                enrollment.Status = DomainStatuses.Enrollment.Confirmed;
+                enrollment.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditLogService.LogAsync(
+            actedByUserId,
+            "PaymentMarkedPaid",
+            "PaymentOrder",
+            payment.Id.ToString(),
+            new { payment.OrderType, payment.ReferenceId },
+            null,
+            cancellationToken);
+
+        return Result<PaymentOrderDto>.Success(ToPaymentOrderDto(payment));
+    }
+
+    private async Task<Result<MockCheckoutCertificateDto>> TryGenerateCertificateFromPaymentAsync(
+        Guid studentId,
+        Guid paymentOrderId,
+        CancellationToken cancellationToken)
+    {
+        var certificate = await _dbContext.Certificates
+            .Include(x => x.PaymentOrder)
+            .FirstOrDefaultAsync(x => x.PaymentOrderId == paymentOrderId, cancellationToken);
+
+        if (certificate is null)
+        {
+            return Result<MockCheckoutCertificateDto>.Failure("not_found", "No se encontró la certificación asociada al pago.");
+        }
+
+        if (certificate.StudentId != studentId)
+        {
+            return Result<MockCheckoutCertificateDto>.Failure("forbidden", "La certificación no pertenece al estudiante actual.");
+        }
+
+        if (certificate.PaymentOrder.Status != DomainStatuses.Payment.Paid)
+        {
+            return Result<MockCheckoutCertificateDto>.Failure("business_rule", "La orden de certificación aún no está pagada.");
+        }
+
+        if (certificate.Status == DomainStatuses.Certificate.Cancelled)
+        {
+            return Result<MockCheckoutCertificateDto>.Failure("business_rule", "La certificación está cancelada.");
+        }
+
+        if (certificate.Status == DomainStatuses.Certificate.Requested ||
+            string.IsNullOrWhiteSpace(certificate.PdfPath) ||
+            !File.Exists(certificate.PdfPath))
+        {
+            var generateResult = await GenerateAsync(studentId, certificate.Id, new GenerateCertificateDto(false, false), cancellationToken);
+            if (!generateResult.IsSuccess || generateResult.Value is null)
+            {
+                return Result<MockCheckoutCertificateDto>.Failure(
+                    generateResult.Error?.Code ?? "certificate_error",
+                    generateResult.Error?.Message ?? "No se pudo generar el certificado.");
+            }
+
+            return Result<MockCheckoutCertificateDto>.Success(new MockCheckoutCertificateDto(
+                certificate.Id,
+                generateResult.Value.Status,
+                generateResult.Value.VerificationCode,
+                !string.IsNullOrWhiteSpace(generateResult.Value.PdfPath) && File.Exists(generateResult.Value.PdfPath)));
+        }
+
+        return Result<MockCheckoutCertificateDto>.Success(new MockCheckoutCertificateDto(
+            certificate.Id,
+            certificate.Status,
+            certificate.VerificationCode,
+            !string.IsNullOrWhiteSpace(certificate.PdfPath) && File.Exists(certificate.PdfPath)));
+    }
+
+    private static Dictionary<string, string[]> ValidateMockCard(MockCheckoutRequestDto request)
+    {
+        var errors = new Dictionary<string, List<string>>();
+
+        var holderName = request.CardHolderName?.Trim() ?? string.Empty;
+        if (holderName.Length < 4)
+        {
+            AddValidationError(errors, "cardHolderName", "Nombre del titular inválido.");
+        }
+
+        var cardDigits = new string((request.CardNumber ?? string.Empty).Where(char.IsDigit).ToArray());
+        if (cardDigits.Length < 13 || cardDigits.Length > 19)
+        {
+            AddValidationError(errors, "cardNumber", "Número de tarjeta inválido.");
+        }
+        else if (!PassesLuhn(cardDigits))
+        {
+            AddValidationError(errors, "cardNumber", "Número de tarjeta no válido.");
+        }
+
+        if (request.ExpiryMonth is < 1 or > 12)
+        {
+            AddValidationError(errors, "expiryMonth", "Mes de vencimiento inválido.");
+        }
+
+        if (request.ExpiryYear is < 2000 or > 2100)
+        {
+            AddValidationError(errors, "expiryYear", "Año de vencimiento inválido.");
+        }
+        else
+        {
+            var now = DateTime.UtcNow;
+            if (request.ExpiryYear < now.Year ||
+                (request.ExpiryYear == now.Year && request.ExpiryMonth < now.Month))
+            {
+                AddValidationError(errors, "expiryMonth", "La tarjeta está vencida.");
+            }
+        }
+
+        var cvv = request.Cvv?.Trim() ?? string.Empty;
+        if (cvv.Length is < 3 or > 4 || cvv.Any(character => !char.IsDigit(character)))
+        {
+            AddValidationError(errors, "cvv", "CVV inválido.");
+        }
+
+        return errors.ToDictionary(x => x.Key, x => x.Value.ToArray());
+    }
+
+    private static void AddValidationError(Dictionary<string, List<string>> errors, string field, string message)
+    {
+        if (!errors.TryGetValue(field, out var fieldErrors))
+        {
+            fieldErrors = [];
+            errors[field] = fieldErrors;
+        }
+
+        fieldErrors.Add(message);
+    }
+
+    private static bool PassesLuhn(string cardDigits)
+    {
+        var sum = 0;
+        var doubleDigit = false;
+        for (var index = cardDigits.Length - 1; index >= 0; index--)
+        {
+            var digit = cardDigits[index] - '0';
+            if (doubleDigit)
+            {
+                digit *= 2;
+                if (digit > 9)
+                {
+                    digit -= 9;
+                }
+            }
+
+            sum += digit;
+            doubleDigit = !doubleDigit;
+        }
+
+        return sum % 10 == 0;
+    }
+
+    private static string MaskCardNumber(string cardNumber)
+    {
+        var digits = new string((cardNumber ?? string.Empty).Where(char.IsDigit).ToArray());
+        if (digits.Length <= 4)
+        {
+            return "****";
+        }
+
+        return new string('*', Math.Max(0, digits.Length - 4)) + digits[^4..];
+    }
+
+    private static PaymentOrderDto ToPaymentOrderDto(PaymentOrder payment)
+        => new(
+            payment.Id,
+            payment.OrderType,
+            payment.ReferenceId,
+            payment.Amount,
+            payment.Currency,
+            payment.Status,
+            payment.Description,
+            payment.CreatedAt,
+            payment.ExpiresAt,
+            payment.PaidAt,
+            payment.CancelledAt);
 
     private static bool IsPaymentExpired(PaymentOrder payment)
         => payment.ExpiresAt <= DateTime.UtcNow;
