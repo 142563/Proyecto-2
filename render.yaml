@@ -1,0 +1,53 @@
+services:
+  - type: web
+    name: miumg-api
+    runtime: docker
+    plan: free
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ConnectionStrings__Default
+        sync: false
+      - key: Jwt__Key
+        generateValue: true
+      - key: Jwt__Issuer
+        value: Academic.Api
+      - key: Jwt__Audience
+        value: Academic.Client
+      - key: Jwt__ExpirationMinutes
+        value: "120"
+      - key: Auth__AllowedEmailDomains__0
+        value: umg.edu.gt
+      - key: Auth__AllowedEmailDomains__1
+        value: alumnos.umg.edu.gt
+      - key: Email__UseMock
+        value: "true"
+      - key: Email__From
+        value: noreply@umg.edu.gt
+      - key: Academic__DefaultCourseCapacity
+        value: "40"
+      - key: Academic__PendingPaymentExpirationHours
+        value: "72"
+      - key: Academic__DefaultCurrency
+        value: GTQ
+      - key: Cors__AllowedOrigins__0
+        sync: false
+
+  - type: web
+    name: miumg-web
+    runtime: static
+    plan: free
+    autoDeploy: true
+    buildCommand: cd frontend/academic-portal && npm ci && node ./scripts/write-env.mjs && npm run build
+    staticPublishPath: ./frontend/academic-portal/dist/academic-portal/browser
+    envVars:
+      - key: API_BASE_URL
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

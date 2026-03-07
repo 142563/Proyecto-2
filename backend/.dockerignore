@@ -1,0 +1,8 @@
+**/bin/
+**/obj/
+**/.vs/
+tools/**/bin/
+tools/**/obj/
+api_run_out.log
+api_run_err.log
+.env

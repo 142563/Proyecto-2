@@ -114,6 +114,39 @@ npm run start
 App Angular:
 - `http://localhost:4200`
 
+## Deploy en Render (API + Frontend)
+El repo ya incluye `render.yaml` con 2 servicios:
+- `miumg-api` (ASP.NET Core en Docker)
+- `miumg-web` (Angular static site)
+
+### 1) Subir a GitHub
+```bash
+git add .
+git commit -m "chore: preparar deploy en render"
+git push origin Dev
+```
+
+### 2) Crear servicios en Render con Blueprint
+1. En Render: **New +** -> **Blueprint**
+2. Conecta tu repositorio y selecciona la rama (`Dev` o `main`).
+3. Render detectará `render.yaml` y creará ambos servicios.
+
+### 3) Configurar variables obligatorias
+En `miumg-api`:
+- `ConnectionStrings__Default` = tu connection string de Neon
+- `Cors__AllowedOrigins__0` = URL pública del frontend en Render (por ejemplo `https://miumg-web.onrender.com`)
+
+En `miumg-web`:
+- `API_BASE_URL` = URL pública del backend en Render (por ejemplo `https://miumg-api.onrender.com`)
+
+### 4) Redeploy
+Después de guardar variables, ejecuta **Manual Deploy** en ambos servicios.
+
+### 5) Verificación rápida
+- API health: `https://<tu-api>.onrender.com/health`
+- Swagger: `https://<tu-api>.onrender.com/swagger`
+- Frontend: `https://<tu-web>.onrender.com`
+
 ## Troubleshooting (Windows - MSB3026/MSB3027)
 Si aparece bloqueo de `Academic.Api` o DLLs:
 ```powershell
